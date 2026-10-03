@@ -40,7 +40,7 @@
 |---|--------|------|------|------|
 | 01 | `bootstrap-http-server` | 最小 HTTP 服务 | 建立项目骨架；新增 capability `service-startup` | ✅ [`2026-10-03-bootstrap-http-server`](changes/archive/2026-10-03-bootstrap-http-server/) |
 | 02 | `directory-browsing` | Finder 风格目录浏览 | 第一个核心 capability | ✅ [`2026-10-03-directory-browsing`](changes/archive/2026-10-03-directory-browsing/) |
-| 03 | `file-metadata` | 文件信息展示 | | 💡 |
+| 03 | `file-metadata` | 文件信息展示 | 实际形态为 `directory-browsing` 的 ADDED Requirement，不产生同名 capability | ✅ [`2026-10-03-add-file-metadata`](changes/archive/2026-10-03-add-file-metadata/) |
 | 04 | `text-preview` | 文本文件查看 | | 💡 |
 | 05 | `improve-text-file-detection` | 无扩展名文本文件可预览 | 第一次需求变更，MODIFIED 演练 | 💡 |
 | 06 | `add-syntax-highlighting` | 代码语法高亮 | | 💡 |
@@ -59,12 +59,15 @@
 
 产品能力边界（仅是地图，不预先创建，立 Change 时按需产生）：
 
-`directory-browsing` · `file-metadata` · `text-preview` · `syntax-highlighting` · `markdown-preview` · `image-preview` · `search` · `file-editing` · `remote-access` · `authentication`
+`directory-browsing` · `text-preview` · `syntax-highlighting` · `markdown-preview` · `image-preview` · `search` · `file-editing` · `remote-access` · `authentication`
+
+> 原计划中的 `file-metadata` capability **不成立**（Change 03 / design D2，已归档）：文件元信息只在目录列表这一处出现，描述的是「列表条目长什么样」，与 `Directory listing response`、`Entry type distinction`、`List ordering` 是同一件事的几个侧面，拆成独立 capability 只会让同一批字段在两处 spec 里各被描述一次。它作为 `directory-browsing` 的 ADDED Requirement `Entry metadata` 落地。等系统真的有了脱离列表的文件详情视图（文件可点之后），再立 capability 才有独立于列表的 Requirement 可写。
 
 立 Change 时按需增补。已产生的：
 
 - `service-startup`（Change 01）：命令行启动契约 + HTTP 响应分区（静态页 vs `/api/` JSON、JSON 错误信封、默认仅监听回环）。不含目录浏览语义。
 - `directory-browsing`（Change 02）：根目录内的目录列表契约——响应形状（`path`/`parent`/`entries`）、条目类型区分、列表顺序、相对路径导航模型、上级目录语义、根目录边界。**不含**文件元信息与文件内容读取。
+- `directory-browsing / Entry metadata`（Change 03）：在上述列表契约之上追加条目的大小与最后修改时间，取值规则由 `Entry metadata` 承诺。**不包含**文件内容读取——那道门仍由 `Directory listing response` 的「SHALL NOT 在列表中提供条目的内容」守住，留给 `text-preview` 有意识地推翻。
 
 ## MVP 明确不做
 
@@ -76,6 +79,7 @@
 
 - **符号链接越界策略**（Change 02 起悬置）：`directory-browsing` 明确只做**字面**路径的越界判定，根目录内指向外部的符号链接可被跟随，spec 已如实承诺这一强度。回环单用户下风险可接受，但 `add-remote-access`（Change 13）开放非回环监听**之前**必须先用 MODIFIED 正式化该策略，否则等于开放远程任意文件读取。
 - **大目录分页**：目录列表一次性返回全部条目，十万级文件目录会产生很大响应体。若要分页会改变 `Directory listing response` 的响应形状，属新增 Requirement，需独立 Change。
-- **`parent` 空值的二义性**（design D10 记录）：根目录与根目录的一级子目录，其 `parent` 都是空字符串，客户端必须靠 `path` 判断是否在根目录。当前刻意不为它引入 `null` 第二种表示；若 `file-metadata` 的面包屑或后续 Change 发现按 `parent` 推断根目录更方便，再用 MODIFIED `Parent directory reference` 把根目录的 `parent` 正式化为 `null` 或缺省。
-- **符号链接的条目类型**（design D12 记录）：指向目录的符号链接目前显示为 `file` 且不可点击，但按其字面路径请求能列出目标内容——「字面路径可提供」与「字面报告为文件」是同一个 D3 决策的两面。等 `file-metadata` 要展示「种类」时一并决定是否把符号链接作为第三类条目，届时 MODIFIED `Entry type distinction`。
+- **`parent` 空值的二义性**（design D10 记录）：根目录与根目录的一级子目录，其 `parent` 都是空字符串，客户端必须靠 `path` 判断是否在根目录。当前刻意不为它引入 `null` 第二种表示；若 Change 03 的面包屑或后续 Change 发现按 `parent` 推断根目录更方便，再用 MODIFIED `Parent directory reference` 把根目录的 `parent` 正式化为 `null` 或缺省。
+- **符号链接的条目类型**（design D12 记录）：指向目录的符号链接目前显示为 `file` 且不可点击，但按其字面路径请求能列出目标内容——「字面路径可提供」与「字面报告为文件」是同一个 D3 决策的两面。等有 Change 要展示「种类」时一并决定是否把符号链接作为第三类条目，届时 MODIFIED `Entry type distinction`。
+- **符号链接的大小是链接自身的长度**（Change 03 / design D4 延伸）：指向一个 100KB 文件的软链在列表里显示几十字节（目标路径字符串的字节数）。这是 D12 已知 wart 的延伸，不是新问题：分类跟随链接会与纯字面的越界判定不对称，所以取数必须走 lstat（`DirEntry.Info`）。spec 已如实承诺（Scenario `An entry is a symbolic link`）而不是留给实现自行解释。要彻底修需要引入 `symlink` 第三类条目类型，属独立决定，与上一条一起认领。
 - **错误态缺少返回上级入口**：目录访问失败时前端清空条目并隐藏上级入口，用户只能靠浏览器后退离开。属纯呈现层（design Open Questions 已声明 spec 未约束错误态呈现），未在本 Change 处理；若实测中确实碍事，可在后续 Change 的前端润色里补上客户端自行推导的上级入口。

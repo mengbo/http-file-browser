@@ -50,3 +50,25 @@
   3. **零构建的前端验证是真验证，但不是自动的。** design D9 声明不做前端自动化测试，于是 7 条前端任务全靠手工。每条都写明了「怎么算通过」——`?path=` 编码后的 href、hover 前后背景色的 `getComputedStyle` 值、`#entries` 内 `img`/`script` 元素数为 0、320px 视口下 `scrollWidth === innerWidth`。这样手工记录才有证据强度，`tasks.md` 8.2 存的是观察结果不是「已验证」三个字。带 `<img src=x onerror=...>` 的真实文件名是这里最有价值的一次构造：它一次性验掉了「用 textContent 而非 innerHTML」这个决策。
   4. **测试构造会被文件系统能力卡住，而 skip 必须说清原因。** 「名称仅大小写不同」那条 Scenario 在 macOS 默认的大小写不敏感 FS 上根本无法构造（三个文件折叠成一个）。按 design D9 已有的 skip 惯例处理，但光 skip 不够——那条 Scenario 真正要防的是 `sort.Slice` 不稳定导致顺序抖动，于是补了 `TestSortEntriesFallsBackToNameForCaseOnlyDifferences` 直接断言比较键第三段。**环境不满足时，skip 之后要回答「那这条 Scenario 要防的东西现在由谁负责」。**
   5. **MODIFIED 的成本确实在归档那一刻才结清。** `TestUnknownAPIEndpointReturnsJSONError` 从 Change 01 起就断言 `error` 是字符串；本 Change 把它改成嵌套结构，那条断言必须改。proposal 与 design 都提前把这条列为显式代价（而不是让 apply 顺手改测试蒙混过去），所以它是计划内的改动，不是「AI 偷偷改了测试」。**MODIFIED 要求必须带完整 Requirement，代价是它连带着既有测试一起欠债。**
+
+### 03 add-file-metadata
+
+- 日期：2026-10-03（归档目录 `openspec/changes/archive/2026-10-03-add-file-metadata/`）
+- 现象一（AI 把 Spec 写成实现行为）：**未发生**。`Entry metadata` 的正文只写可观察行为（给出什么值、以什么单位、什么情况下不给出），`DirEntry.Info`、`int64` 指针、`omitempty`、Unix() 这些全部留在 design D4/D5/D6 与 tasks 1.1–1.4。特别值得注意的是 `modified_at` 的形状：spec 承诺「以自 Unix 纪元起的整数秒表示」，但「用整数秒而不是 RFC3339 字符串」这条理由（可复现性）写在 design D6，spec 里一个字都没提格式选择的动机——这正是 SDD 该有的分工。
+- 现象二（需求变化被误做成 ADDED）：**未发生，但踩在边缘**。本 Change 的核心动作就是推翻 Change 02 自己写下的一句排除（「不提供大小、修改时间或内容」）。proposal 把它明确拆成 ADDED `Entry metadata` + MODIFIED `Directory listing response`，并且——这是关键——**只推翻前半句**。如果原地改那一句，最省事的写法是三个词一起删，「不提供内容」就被顺手松掉了，`text-preview` 那道门从此无人看守。加一条 Scenario `A listed directory contains readable files` 把「响应不含内容」从一句措辞变成可断言的行为之后，Change 04 要读内容就是**有意识地推翻一条 Scenario**，而不是发现那道门根本没锁。
+- 现象三（Apply 偷偷扩大范围）：**未发生**（一条自查后收回的除外，见下）。本 Change 的 seam（tasks 1.4）在 propose 阶段就作为独立任务显式存在，而不是 apply 时顺手加的——这正是 Change 02 journal 观察里后悔过的那类越界。
+- 其他观察：
+  1. **设计决策可以有一个「唯一的守门人」，前提是那条测试真的守得住。** D4（lstat 而非 `os.Stat`）被写成了「本 Change 最容易做错、且错法最危险的一个决定」，但设计文档本身无法被测试。这次收尾时把 `fillMetadata` 临时改成 `os.Stat` 跑了一遍，`TestAnEntryIsASymbolicLink` 立刻红在 `size = 65536，期望链接自身的长度 112` 上。**一条「应该能抓住」的测试，必须真的被证伪过一次**才算守门人，否则它只是一段看起来很有道理的断言。
+  2. **造数据时要保证「错的实现」和「对的实现」在断言处不会偶然相等。** 那条软链用例最初的目标文件与目标路径字符串长度可能接近，此时 `Stat` 与 `Info` 会取到同一个值，用例永远绿。因此在用例里加了一道前置：目标内容必须显著大于路径字符串（64KB vs 85 字节），否则用例自己 `t.Fatalf`。**守卫用例的构造本身也需要被审。**
+  3. **`Chtimes` 改目录时间必须放在写完内容之后。** 头一版 `TestADirectoryEntryIsListed` 先定目录时间再造文件，新建条目会把目录的 mtime 改掉，断言随之失败。同一个坑在 `TestRepeatedListingsReturnTheSameMetadata` 里又踩了一次。**「固定某个时间戳」与「在它之后改变目录内容」不能共存，顺序是一条硬约束，值得写进用例注释。**
+  4. **前端「窄屏降级」很容易变成静默丢数据。** 三列布局在 320px 下必然紧张，我第一版直接用媒体查询把「修改时间」整列 `display: none`，理由是「表现层细节」。截图后发现那其实是一个产品取舍：用户在没有提示的情况下少看到一整类元信息，而这不在 design D8 授权的「呈现细节」范围内。改成三列全部保留、只收窄固定列宽并调小字号后实测 320px 下 `scrollWidth === innerWidth === 320`、长文件名换行、时间字符串仍单行。**「spec 不约束」不等于「随便定」——表现层里仍然有会改变用户所见数据的决定。**
+  5. **`content: 'x'` 与 `<img src=x onerror=...>` 的区别。** 验证「响应不含文件内容」时，最初准备的文件内容是一个字母 `x`——它在 `{"name":` 这种 JSON 里必然出现，断言 `!strings.Contains(body, content)` 等于永远失败。换成 `READMECONTENTMARKER` 才成为一条可能失败的断言。**用来证明「某样东西不在场」的标记，必须是别处不会偶然出现的。**
+  6. **一次经用户授权的破例：改 capability 的 Purpose。** `openspec/specs/directory-browsing/spec.md` 的 Purpose 写着「不包含文件元信息与文件内容读取」，本 Change 让前半句变假。archive 只合并 Requirement、不重写 Purpose，而 `AGENTS.md` 写着「禁止直接修改 `openspec/specs/`，前者由 sync/archive 更新」。但 archive 只合并 Requirement，**没有任何工具会重写 Purpose**——这半句从 Change 02 归档起就注定了要在某次归档时变假。
+
+三种走法里选了第三种：**把冲突摆出来，由用户授权改这一句，并留下记录**。理由有两条。其一，CLI 自己的 `openspec instructions specs` 输出明确写着「To change an existing capability's Purpose — including a leftover `TBD` placeholder — edit `openspec/specs/<capability>/spec.md` directly」——**这正是 OpenSpec 对这一处设计的官方路径**，`AGENTS.md` 的禁令本意是「别让 AI 悄悄重写 capability 定义」，而 Purpose 是散文不是定义。其二，「不包含文件元信息」与新 Requirements 直接矛盾时，留着一句假话的代价是：下一个 Change（`text-preview`）读这份 capability 契约，会以为自己不该碰元信息。
+
+**但规则的价值在于被遵守，不在于被论证得通。** 因此这次破例被显式记在这里：授权范围是「那一句」，不是「以后都可以改」；下次若再遇到同类情形，仍要重新问一遍。**为了让 accountability 成立，必须把破例写下来——只在心里知道自己破过例，下次就会顺手破第二次。**
+
+顺带一条，纠正我自己在 verify 阶段的误判：同一份 capability 里还有一对同名 Scenario（`A directory contains both directories and files` 同时挂在 `Entry type distinction` 与 `List ordering` 下）。我在 verify 报告里把它当成「Change 02 遗留的瑕疵」，**这是错的**——Change 02 的 tasks 4.5 原文写着「注意 spec 中……各有一条同名 Scenario……两个测试必须用可区分的名字，不得合并或重名」。它是当时撞到同一个碰撞后**有意保留**的：WHEN 措辞对两条 Requirement 都自然，于是差异放到测试名上区分（`TestEntryTypeIsDistinguishedInAMixedDirectory` 与 `TestDirectoriesPrecedeFilesInAMixedDirectory`）。
+
+本 Change 自己引入的那对（`The same directory is listed repeatedly`）确实该改，改在归档之前，因此 archive 副本与 spec 仍然一致。**两件事同形，处理方式却不同，差别在归属**：一个 Change 有权清理自己造成的麻烦，但不该顺手推翻另一个已归档 Change 记录在案的判断。判断一条 spec 文本是不是缺陷，要先去看当初的 Change 有没有为它做过决定——本次差点凭「看起来别扭」就动手。
