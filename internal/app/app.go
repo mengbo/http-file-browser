@@ -41,11 +41,11 @@ func run(args []string, stdout, stderr io.Writer, assets fs.FS, listen listenFun
 
 	fmt.Fprintf(stdout, "服务已就绪，访问 http://%s 浏览 %s\n", listener.Addr(), root)
 
-	return serve(listener, assets)
+	return serve(listener, root, assets)
 }
 
-func serve(listener net.Listener, assets fs.FS) error {
-	return http.Serve(listener, server.NewHandler(assets))
+func serve(listener net.Listener, root string, assets fs.FS) error {
+	return http.Serve(listener, server.NewHandler(root, assets))
 }
 
 func rootDir(args []string) (string, error) {

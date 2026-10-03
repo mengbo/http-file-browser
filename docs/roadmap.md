@@ -39,7 +39,7 @@
 | # | Change | 目标 | 备注 | 状态 |
 |---|--------|------|------|------|
 | 01 | `bootstrap-http-server` | 最小 HTTP 服务 | 建立项目骨架；新增 capability `service-startup` | ✅ [`2026-10-03-bootstrap-http-server`](changes/archive/2026-10-03-bootstrap-http-server/) |
-| 02 | `directory-browsing` | Finder 风格目录浏览 | 第一个核心 capability | 💡 |
+| 02 | `directory-browsing` | Finder 风格目录浏览 | 第一个核心 capability | 🚧 |
 | 03 | `file-metadata` | 文件信息展示 | | 💡 |
 | 04 | `text-preview` | 文本文件查看 | | 💡 |
 | 05 | `improve-text-file-detection` | 无扩展名文本文件可预览 | 第一次需求变更，MODIFIED 演练 | 💡 |
@@ -73,4 +73,8 @@
 
 尚未规划为 Change 的点子。立 Change 时从这里认领或新增。
 
-- （空）
+- **符号链接越界策略**（Change 02 起悬置）：`directory-browsing` 明确只做**字面**路径的越界判定，根目录内指向外部的符号链接可被跟随，spec 已如实承诺这一强度。回环单用户下风险可接受，但 `add-remote-access`（Change 13）开放非回环监听**之前**必须先用 MODIFIED 正式化该策略，否则等于开放远程任意文件读取。
+- **大目录分页**：目录列表一次性返回全部条目，十万级文件目录会产生很大响应体。若要分页会改变 `Directory listing response` 的响应形状，属新增 Requirement，需独立 Change。
+- **`parent` 空值的二义性**（design D10 记录）：根目录与根目录的一级子目录，其 `parent` 都是空字符串，客户端必须靠 `path` 判断是否在根目录。当前刻意不为它引入 `null` 第二种表示；若 `file-metadata` 的面包屑或后续 Change 发现按 `parent` 推断根目录更方便，再用 MODIFIED `Parent directory reference` 把根目录的 `parent` 正式化为 `null` 或缺省。
+- **符号链接的条目类型**（design D12 记录）：指向目录的符号链接目前显示为 `file` 且不可点击，但按其字面路径请求能列出目标内容——「字面路径可提供」与「字面报告为文件」是同一个 D3 决策的两面。等 `file-metadata` 要展示「种类」时一并决定是否把符号链接作为第三类条目，届时 MODIFIED `Entry type distinction`。
+- **错误态缺少返回上级入口**：目录访问失败时前端清空条目并隐藏上级入口，用户只能靠浏览器后退离开。属纯呈现层（design Open Questions 已声明 spec 未约束错误态呈现），未在本 Change 处理；若实测中确实碍事，可在后续 Change 的前端润色里补上客户端自行推导的上级入口。

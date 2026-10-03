@@ -2,47 +2,105 @@
   color-scheme: light dark;
 }
 
+/* 类选择器上的 display 会盖过 UA 样式表里 [hidden] 的 display: none，
+   使被隐藏的条目仍然可见。这里统一兜底，让 hidden 属性在任何 display 下都生效。 */
+[hidden] {
+  display: none !important;
+}
+
 body {
   margin: 0;
   min-height: 100vh;
-  display: grid;
-  place-items: center;
   font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", "PingFang SC", sans-serif;
   background: #f5f5f7;
   color: #1d1d1f;
 }
 
-.panel {
-  text-align: center;
-  padding: 2.5rem 3rem;
-  border-radius: 12px;
-  background: #ffffff;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+.browser {
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 2rem 1.25rem 4rem;
 }
 
-h1 {
+.toolbar {
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid #d8d8dc;
+}
+
+.title {
   margin: 0 0 0.25rem;
-  font-size: 1.5rem;
+  font-size: 1.25rem;
 }
 
-.subtitle {
-  margin: 0 0 1.5rem;
+/* 根目录加相对路径可能很长，窄窗口下换行而不是撑破布局。 */
+.location {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #6e6e73;
+  overflow-wrap: anywhere;
+}
+
+.error {
+  margin: 1rem 0 0;
+  padding: 0.6rem 0.75rem;
+  border-radius: 8px;
+  background: #fdecea;
+  color: #b3261e;
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.parent {
+  margin: 0.75rem 0 0;
+}
+
+.parent-link {
+  display: inline-block;
+  padding: 0.3rem 0;
+  color: #0b62d0;
+  font-size: 0.9rem;
+  text-decoration: none;
+}
+
+.parent-link:hover {
+  text-decoration: underline;
+}
+
+.entries {
+  margin: 0.5rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.entry {
+  padding: 0.4rem 0.5rem;
+  border-radius: 6px;
+  border-bottom: 1px solid #ebebef;
+  font-size: 0.95rem;
+  overflow-wrap: anywhere;
+}
+
+/* 目录条目可点击，有 hover 反馈。 */
+.entry-link {
+  display: block;
+  color: #0b62d0;
+  text-decoration: none;
+}
+
+.entry:has(.entry-link):hover {
+  background: #eceef2;
+}
+
+/* 文件条目不可进入：不呈现可点击外观，避免死胡同手感。 */
+.entry-name {
+  color: #3a3a3c;
+  cursor: default;
+}
+
+.empty {
+  margin: 1.25rem 0 0;
   color: #6e6e73;
   font-size: 0.9rem;
-}
-
-.status {
-  margin: 0;
-  font-size: 1rem;
-  color: #6e6e73;
-}
-
-.status--ok {
-  color: #1d7a3e;
-}
-
-.status--error {
-  color: #b3261e;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -51,21 +109,34 @@ h1 {
     color: #f5f5f7;
   }
 
-  .panel {
-    background: #2c2c2e;
-    box-shadow: none;
+  .toolbar {
+    border-bottom-color: #3a3a3c;
   }
 
-  .subtitle,
-  .status {
+  .location,
+  .empty {
     color: #98989d;
   }
 
-  .status--ok {
-    color: #4cd964;
+  .error {
+    background: #3a1f1c;
+    color: #ff6961;
   }
 
-  .status--error {
-    color: #ff6961;
+  .parent-link,
+  .entry-link {
+    color: #64a8ff;
+  }
+
+  .entry {
+    border-bottom-color: #2c2c2e;
+  }
+
+  .entry:has(.entry-link):hover {
+    background: #2c2c2e;
+  }
+
+  .entry-name {
+    color: #d1d1d6;
   }
 }

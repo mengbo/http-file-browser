@@ -11,10 +11,11 @@ import (
 )
 
 func TestServiceHealthIsQueried(t *testing.T) {
+	root := t.TempDir()
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/api/health", nil)
 
-	NewAPIHandler().ServeHTTP(recorder, request)
+	NewAPIHandler(root).ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusOK {
 		t.Errorf("状态码 = %d，期望 %d", recorder.Code, http.StatusOK)
@@ -25,6 +26,7 @@ func TestServiceHealthIsQueried(t *testing.T) {
 
 	var body struct {
 		Status string `json:"status"`
+		Root   string `json:"root"`
 	}
 	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
 		t.Fatalf("响应体不是可反序列化的 JSON：%v（body = %q）", err, recorder.Body.String())
@@ -32,13 +34,16 @@ func TestServiceHealthIsQueried(t *testing.T) {
 	if body.Status != "ok" {
 		t.Errorf("status = %q，期望 %q", body.Status, "ok")
 	}
+	if body.Root != root {
+		t.Errorf("root = %q，期望 %q", body.Root, root)
+	}
 }
 
 func TestUnknownAPIEndpointReturnsJSONError(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/api/nope", nil)
 
-	NewAPIHandler().ServeHTTP(recorder, request)
+	NewAPIHandler(t.TempDir()).ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusNotFound {
 		t.Errorf("状态码 = %d，期望 %d", recorder.Code, http.StatusNotFound)
@@ -47,22 +52,20 @@ func TestUnknownAPIEndpointReturnsJSONError(t *testing.T) {
 		t.Errorf("Content-Type = %q，期望 JSON", contentType)
 	}
 
-	var body struct {
-		Error string `json:"error"`
-	}
+	var body errorResponse
 	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
 		t.Fatalf("响应体不是可反序列化的 JSON：%v（body = %q）", err, recorder.Body.String())
 	}
-	if body.Error == "" {
-		t.Error("错误响应缺少机器可读的错误标识（error 字段）")
+	if body.Error.Code != codeNotFound {
+		t.Errorf("error.code = %q，期望 %q", body.Error.Code, codeNotFound)
 	}
-	if !strings.Contains(body.Error, "/api/nope") {
-		t.Errorf("error = %q，期望说明未找到的路径", body.Error)
+	if !strings.Contains(body.Error.Message, "/api/nope") {
+		t.Errorf("error.message = %q，期望说明未找到的路径", body.Error.Message)
 	}
 }
 
 func TestAPIPrefixTakesPrecedenceOverFileService(t *testing.T) {
-	handler := NewHandler(web.FS)
+	handler := NewHandler(t.TempDir(), web.FS)
 
 	for _, path := range []string{"/api/nope", "/api/", "/api/unknown/deep"} {
 		t.Run(path, func(t *testing.T) {
@@ -82,7 +85,7 @@ func TestAPIPrefixTakesPrecedenceOverFileService(t *testing.T) {
 func TestRootPathReturnsFrontendPage(t *testing.T) {
 	recorder := httptest.NewRecorder()
 
-	NewHandler(web.FS).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/", nil))
+	NewHandler(t.TempDir(), web.FS).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/", nil))
 
 	if recorder.Code != http.StatusOK {
 		t.Errorf("状态码 = %d，期望 %d", recorder.Code, http.StatusOK)
@@ -96,7 +99,7 @@ func TestRootPathReturnsFrontendPage(t *testing.T) {
 }
 
 func TestFrontendStaticAssetsAreServedWithMatchingContentType(t *testing.T) {
-	handler := NewHandler(web.FS)
+	handler := NewHandler(t.TempDir(), web.FS)
 
 	for path, wantType := range map[string]string{
 		"/app.js":    "text/javascript",

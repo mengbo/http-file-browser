@@ -7,10 +7,21 @@
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <main class="panel">
-    <h1>http-file-browser</h1>
-    <p class="subtitle">零配置的本地 HTTP 文件浏览器</p>
-    <p id="status" class="status">正在检查服务状态…</p>
+  <main class="browser">
+    <header class="toolbar">
+      <h1 class="title">http-file-browser</h1>
+      <p id="location" class="location" aria-live="polite">正在加载…</p>
+    </header>
+
+    <p id="error" class="error" role="alert" hidden></p>
+
+    <nav class="parent">
+      <a id="parent-link" class="parent-link" href="/" hidden>↑ 上级目录</a>
+    </nav>
+
+    <ul id="entries" class="entries"></ul>
+
+    <p id="empty" class="empty" hidden>此目录为空</p>
   </main>
   <script src="/app.js"></script>
 </body>
