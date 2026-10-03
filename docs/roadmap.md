@@ -44,7 +44,7 @@
 | 04 | `text-preview` | 文本文件查看 | 判定刻意用扩展名白名单，内容嗅探留给 05 | ✅ [`2026-10-03-text-preview`](changes/archive/2026-10-03-text-preview/) |
 | 05 | `improve-text-file-detection` | 无扩展名文本文件可预览 | 第一次需求变更，MODIFIED 演练 | ✅ [`2026-10-03-improve-text-file-detection`](changes/archive/2026-10-03-improve-text-file-detection/) |
 | 06 | `add-syntax-highlighting` | 代码语法高亮 | 验收策略先立 [ADR-0003](adr/0003-presentation-acceptance.md)：呈现层 Scenario 按性质分派断言位置 | ✅ [`2026-10-03-add-syntax-highlighting`](changes/archive/2026-10-03-add-syntax-highlighting/) |
-| 07 | `add-markdown-preview` | Markdown 渲染 | 携带 syntax-highlighting MODIFIED：渲染形式的 `.md` 整体让渡给 `markdown-preview`（条件挂呈现形式，为 08 源码视图留位） | 🚧 |
+| 07 | `add-markdown-preview` | Markdown 渲染 | 携带 syntax-highlighting MODIFIED：渲染形式的 `.md` 整体让渡给 `markdown-preview`（条件挂呈现形式，为 08 源码视图留位） | ✅ [`2026-10-03-add-markdown-preview`](changes/archive/2026-10-03-add-markdown-preview/) |
 | 08 | `improve-markdown-preview` | 渲染/源码视图切换 | 第二次需求变更，MODIFIED 演练 | 💡 |
 | 09 | `add-image-preview` | 图片预览 | | 💡 |
 | 10 | `add-file-search` | 文件搜索 | | 💡 |

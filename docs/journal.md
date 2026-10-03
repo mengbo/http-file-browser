@@ -113,3 +113,16 @@
   3. **版本验证项自己也需要版本感知**：tasks 3.4 写「注释中的版本号与运行时 `hljs.version` 一致」，而 11.12.0 的属性名是 `hljs.versionString`（`hljs.version` 不存在）。跨版本的 API 断言先在运行时探一下属性名，别把文档记忆当契约。
   4. **样式协调的判断依据是读上游产物，不是猜**：github 主题只有 `.hljs` 一条基础色规则、不设字号，所以「preview 固定白底 + 主题 token 着色」无冲突；删掉 style.css 深色媒体查询里的 `.preview` 覆盖是唯一需要的动作。vendored 文件升级时这一步要重做——主题若哪天带上 `font-size`，协调方式就得变。
   5. **归档时确认 Purpose 仍然为真**（Change 03 观察 6 纪律的第三次执行）：`syntax-highlighting` 的 Purpose 写「不包含语言识别的具体方法」，实现用了别名表 + auto + 阈值而 spec 无一处提及，仍然成立。
+
+### 07 add-markdown-preview
+
+- 日期：2026-10-03（归档目录 `openspec/changes/archive/2026-10-03-add-markdown-preview/`）
+- 现象一（AI 把 Spec 写成实现方案）：**未发生**。五条 Requirement 全部是可观察行为——「以 Markdown 渲染形式呈现」「以字面形式呈现」「导航到解析出的目标位置」「在新的浏览器标签页中打开」「得到的字符序列与该代码块在文件中的内容一致」；markdown-it 与 `html: false`、`SCHEME_RE`、路径逐段解码与 `..` 弹栈、`AUTO_MIN_RELEVANCE` 阈值、fence 钩子返回 `<pre` 前缀串的机制，全部留在 design D1-D8 与代码注释。spec 里连「markdown-it」这个库名都没出现。
+- 现象二（需求变化被误做成 ADDED）：**第二次 MODIFIED 演练如约发生**。syntax-highlighting 的「Syntax highlighted presentation」被整体让渡——条件挂在「呈现形式」上（被 Markdown 渲染呈现的文件）而非文件种类上，为 Change 08 的渲染/源码切换留好了位；delta 带完整 Requirement 重写（正文 + 3 条 Scenario，两条旧 Scenario 原样保留）。sync 合并第二次退化成「单块整替 + 断言」（Change 05 观察 3 的做法直接复用），新增 capability 则是「Purpose 逐字搬运 + ADDED 落位」——合并的智能依旧体现在知道这次不需要智能。
+- 现象三（Apply 偷偷扩大范围）：**一起小的，已报告**。`index.html` 里 preview 元素的注释随 tasks 2.2 一并改写（tasks 只点名 `app.js`）——该注释复述的「字符串只能来自 hljs 输出」在双管线并行后已不完整，D7「避免注释撒谎」的动机对它同样成立，零行为变化。无功能被静默增删。
+- 其他观察：
+  1. **D9 分派表的「注入异常」一行接住了一条真实防线缺口**：`markdownHTMLFor` 初版没有 try/catch——注释声称「抛错返回 null」，实现却让异常沿 promise 链落进「无法连接服务」的错误提示，正好违反「SHALL NOT 向用户报告错误」。API 层测试、`openspec validate`、正常路径走查都绿，只有按分派表构造故障输入才红。**「渲染未成功」这类罕见路径的可观察行为，靠等渲染器自己抛错是测不到的，注入故障是唯一的入射角。**
+  2. **第二次安全收窄的防线形状与第一次不同，成本也悬殊**：Change 06 的形状校验是「信任库输出、校验拦截」，写成 30 行正则；这次的配置性封闭（`html: false`）是一个构造参数——解析器根本不为 HTML 开门，无需输出校验。两条防线在注释里并列陈述、互不替代；「安全靠配置不靠组件」第一次落地，连 sanitizer 这个信任面都没引入。
+  3. **多标签断言要先确认 eval 落在哪个 tab**：外部链接点击后 agent-browser 的活动标签自动切到新标签，`eval` 随之落在 example.com 上，差点误判成「当前页变了」。实际行为正确（t1 原页未动、t2 新开）；工具的 tab 模型把 spec 里「新的浏览器标签页中打开，当前呈现保持不变」这句话显性化成了两个 tab 的状态比对，这比单页断言更贴近语义本义。
+  4. **init script 注入让故障成为可构造输入**：用 `defineProperty` setter 陷阱把 `markdownit` 全局替换为构造即抛错的函数，比寻找「病态输入」更可复现——渲染器对什么输入抛错是库的实现细节，故障注入不依赖它。
+  5. **归档时确认 Purpose 仍然为真**（Change 03 观察 6 纪律第四次执行）：`markdown-preview` 的 Purpose 写「不包含文件内容的修改与写回」「不包含渲染呈现之外的语法高亮呈现」，实现服务端零代码变化、代码块高亮挂在本 capability 之下，均成立。`syntax-highlighting` 的 Purpose「不包含 Markdown、图片等其他类型的渲染呈现」在让渡后反而更准了。
