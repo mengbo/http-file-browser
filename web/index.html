@@ -34,8 +34,12 @@
     <p id="empty" class="empty" hidden>此目录为空</p>
 
     <!-- 文件视图：列表三列与空目录提示都让位给内容。素文本路径经 textContent 写入；
-         高亮路径与 Markdown 路径各有一条防线（app.js safeHighlightHTML 上方注释）：
-         前者靠 hljs 输出形状校验，后者靠 markdown-it html:false 配置性封闭。 -->
+         Markdown 文件有渲染与源码两种呈现形式，各挂一条防线（app.js safeHighlightHTML 上方注释）：
+         渲染形式靠 markdown-it html:false 配置性封闭，源码形式与普通高亮路径靠 hljs 输出形状校验。 -->
+    <!-- 呈现形式切换（improve-markdown-preview design D3）：必须独立于 #preview——它的内容被
+         innerHTML/textContent 整体覆盖，控件放里面活不过第一次写入。仅查看 Markdown 文件时由 app.js
+         显示（渲染、源码、回退三态），文案表达目标形式，不写 History/URL。 -->
+    <button id="form-toggle" class="form-toggle" type="button" hidden>查看源码</button>
     <pre id="preview" class="preview" hidden></pre>
   </main>
   <!-- hljs 与 markdown-it 必须先于 app.js 就位：renderContent 直接引用全局 hljs 与 markdownit。 -->

@@ -153,6 +153,23 @@ body {
   tab-size: 4;
 }
 
+/* 呈现形式切换按钮（improve-markdown-preview）：文件视图的部件而非内容，随外观切换配色。
+   仅查看 Markdown 文件时由 app.js 显示，文案表达目标形式（渲染形式下「查看源码」）。 */
+.form-toggle {
+  margin: 0.5rem 0 0;
+  padding: 0.3rem 0.75rem;
+  border: 1px solid #d8d8dc;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #0b62d0;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.form-toggle:hover {
+  border-color: #0b62d0;
+}
+
 .empty {
   margin: 1.25rem 0 0;
   color: #6e6e73;
@@ -363,6 +380,16 @@ body {
   .parent-link,
   .entry-link {
     color: #64a8ff;
+  }
+
+  .form-toggle {
+    background: #2c2c2e;
+    border-color: #3a3a3c;
+    color: #64a8ff;
+  }
+
+  .form-toggle:hover {
+    border-color: #64a8ff;
   }
 
   .entry {

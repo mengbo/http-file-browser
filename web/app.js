@@ -8,6 +8,7 @@
   var entriesHeaderEl = document.getElementById("entries-header");
   var emptyEl = document.getElementById("empty");
   var previewEl = document.getElementById("preview");
+  var formToggleEl = document.getElementById("form-toggle");
 
   // 错误提示按机器可读错误标识分支，而不是匹配服务端说明文本。
   var ERROR_TEXT = {
@@ -155,11 +156,13 @@
   }
 
   // 两条 HTML 写入管线各有防线（Change 06 D2 的第一次收窄 + markdown-preview 的第二次收窄，形状不同）：
-  // 高亮路径（文件体高亮、Markdown 渲染内的代码块高亮）靠输出形状校验——交给 HTML 解析器的字符串只能
-  // 来自 highlight.js 的输出，且写入前经此校验：所有标签必须是 <span>（开标签可带且仅可带 class 属性），
-  // 闭标签必须是裸 </span>；文本部分的 <、> 只能是已被转义的实体（&lt; 等），校验后残留任何裸 <、> 即整段拒绝。
-  // Markdown 主输出靠配置性封闭——markdown-it 以 html:false 运行，解析器根本不为内嵌 HTML 开门，
-  // 无需输出校验（markdown-preview design D2）。两套论证各自成立，互不替代。
+  // 高亮路径（文件体高亮、Markdown 源码形式、Markdown 渲染内的代码块高亮）靠输出形状校验——
+  // 交给 HTML 解析器的字符串只能来自 highlight.js 的输出，且写入前经此校验：所有标签必须是 <span>
+  // （开标签可带且仅可带 class 属性），闭标签必须是裸 </span>；文本部分的 <、> 只能是已被转义的
+  // 实体（&lt; 等），校验后残留任何裸 <、> 即整段拒绝。
+  // Markdown 渲染主输出靠配置性封闭——markdown-it 以 html:false 运行，解析器根本不为内嵌 HTML 开门，
+  // 无需输出校验（markdown-preview design D2）。两套论证各自成立，互不替代；Markdown 文件的两种
+  // 呈现形式各挂一条，切换不改防线归属（improve-markdown-preview design D2）。
   // 拒绝的方向都是回退素文本而非报错：呈现永远安全失败（spec: Fallback 的精神）。
   var SPAN_OPEN = /<span(?:\s+class="[^"]*")?>/g;
   var SPAN_CLOSE = /<\/span>/g;
@@ -173,6 +176,10 @@
   }
 
   function hidePreview() {
+    // 按钮状态随视图重算，不依赖上次状态（design D3）：目录与错误态不经过 renderContent，
+    // 在这里一并隐藏；文件视图的载荷一并作废，切换无从谈起。
+    formToggleEl.hidden = true;
+    currentFile = null;
     previewEl.textContent = "";
     previewEl.hidden = true;
   }
@@ -219,7 +226,8 @@
 
   // ============ Markdown 渲染管线（markdown-preview，design D1-D7）============
 
-  // D3 识别：纯名字判定，扩展名 md/markdown 即渲染。装饰不是门：识别错的代价只是
+  // D3 识别：纯名字判定，扩展名 md/markdown 即按 Markdown 文件对待——默认渲染呈现，
+  // 可由用户切换为源码形式（improve-markdown-preview design D1/D2）。装饰不是门：识别错的代价只是
   // 「本该素文本的东西被渲染」，.md 按惯例就是 Markdown。与 text-preview 的文本判定零耦合：
   // 不被判为文本的文件根本到不了这里，两道门各管各的。
   var MARKDOWN_EXTENSIONS = { md: true, markdown: true };
@@ -362,12 +370,25 @@
 
 
 
+  // ============ 呈现形式切换（improve-markdown-preview design D1/D3）============
+
+  // 源码形式状态：模块级单布尔，不按路径记忆——切换只影响当前查看，每次查看从渲染形式开始
+  // （探索已定的无记忆语义）。重置点在 load() 入口：条目点击、parent 导航、popstate、首次加载
+  // 的唯一汇聚点，一处重置即覆盖「离开后再进入」的全部路径（浏览器刷新本就跨文档）。
+  // 切换动作不经过 load()：翻转布尔后对当前文件内容重跑呈现分派，避免与入口重置互相打架。
+  var sourceForm = false;
+
+  // 当前文件视图的内容载荷（/api/content 的响应体），供切换按钮对同一内容重跑呈现分派，
+  // 不重新请求；目录与错误态视图不经过 renderContent，离开文件视图时由 hidePreview 清掉。
+  var currentFile = null;
+
   // renderContent 渲染文件视图。三条呈现路径、两种防线（见 safeHighlightHTML 上方注释）：
   // 素文本路径维持 Change 05 起的 textContent 不变承诺；高亮路径的字符串只能来自 hljs 输出且
-  // 过形状校验；Markdown 路径的字符串来自 markdown-it（html:false 配置性封闭，形状校验不适用——
-  // 那是高亮路径的防线）。素文本与高亮殊途同归：#preview 的 textContent 永远等于文件内容——
-  // 高亮只是着色，不增删改任何字符（spec: Content preservation under highlighting）。
-  // Markdown 路径的行为由 markdown-preview 定义：渲染未成功整段回退素文本、不报错。
+  // 过形状校验；Markdown 渲染路径的字符串来自 markdown-it（html:false 配置性封闭，形状校验不适用——
+  // 那是高亮路径的防线）。Markdown 文件按呈现形式分岔（design D2）：默认渲染，源码形式复用高亮管线，
+  // 与素文本殊途同归——#preview 的 textContent 永远等于文件内容，高亮只是着色，不增删改任何字符
+  // （spec: Content preservation under highlighting）。渲染路径的行为由 markdown-preview 定义：
+  // 渲染未成功整段回退素文本、不报错，回退仍属渲染形式的呈现。
   function renderContent(content) {
     clearError();
     hideEntries();
@@ -375,16 +396,32 @@
     // 文件的上级就是它所在的目录；文件位于根目录时该入口指向根目录本身。
     parentLinkEl.setAttribute("href", urlFor(parentOf(content.path)));
     parentLinkEl.hidden = false;
-    if (isMarkdownPath(content.path)) {
-      var markdownHTML = markdownHTMLFor(content.content);
-      if (markdownHTML === null) {
-        previewEl.className = "preview";
-        previewEl.textContent = content.content;
+    currentFile = content;
+    var markdown = isMarkdownPath(content.path);
+    updateFormToggle(markdown);
+    if (markdown) {
+      if (sourceForm) {
+        // 源码形式路由回既有高亮管线（design D2，syntax-highlighting 接管）：与素文本殊途同归，
+        // #preview 的 textContent 永远等于文件内容，高亮只是着色（spec: Content preservation）。
+        var sourceHTML = highlightHTMLFor(content.path, content.content);
+        if (sourceHTML !== null && safeHighlightHTML(sourceHTML) !== null) {
+          previewEl.className = "preview hljs";
+          previewEl.innerHTML = sourceHTML;
+        } else {
+          previewEl.className = "preview";
+          previewEl.textContent = content.content;
+        }
       } else {
-        // preview 类切换为 markdown：渲染排版样式挂在它上面，素文本与高亮样式不受牵连。
-        previewEl.className = "preview markdown";
-        previewEl.innerHTML = markdownHTML;
-        rewriteRenderedLinks(previewEl, content.path);
+        var markdownHTML = markdownHTMLFor(content.content);
+        if (markdownHTML === null) {
+          previewEl.className = "preview";
+          previewEl.textContent = content.content;
+        } else {
+          // preview 类切换为 markdown：渲染排版样式挂在它上面，素文本与高亮样式不受牵连。
+          previewEl.className = "preview markdown";
+          previewEl.innerHTML = markdownHTML;
+          rewriteRenderedLinks(previewEl, content.path);
+        }
       }
       previewEl.hidden = false;
       return;
@@ -402,6 +439,29 @@
     }
     previewEl.hidden = false;
   }
+
+  // 切换按钮状态随每次 renderContent 重算，不依赖上次状态（design D3）：
+  // 仅 Markdown 文件视图可见（渲染、源码、回退三态——回退属渲染形式的呈现，切到源码走高亮管线，
+  // 与 spec 一致），目录、错误态、非 Markdown 文件隐藏（后两者由 hidePreview / 本函数的 else 支兜住）。
+  // 文案表达目标形式：渲染形式下「查看源码」，源码形式下「查看渲染」。
+  function updateFormToggle(isMarkdown) {
+    if (!isMarkdown) {
+      formToggleEl.hidden = true;
+      return;
+    }
+    formToggleEl.textContent = sourceForm ? "查看渲染" : "查看源码";
+    formToggleEl.hidden = false;
+  }
+
+  // 切换是纯呈现层动作：翻转状态后对当前文件内容重跑呈现分派，不经过 load()（避免入口重置
+  // 与切换打架）、不写 History/URL（pushState 只属于 navigate，design D3）。
+  formToggleEl.addEventListener("click", function () {
+    if (currentFile === null) {
+      return;
+    }
+    sourceForm = !sourceForm;
+    renderContent(currentFile);
+  });
 
   function renderFailure(code, message) {
     hideEntries();
@@ -432,6 +492,9 @@
   // 同一个位置参数在两个端点上指向不同类型的对象：列表成功就是目录，
   // not_a_directory 就是文件，转问内容端点；其余失败原因两边一致，直接报错。
   function load(path) {
+    // 每次查看从渲染形式开始（design D1）：load() 是一切视图切换的单一入口，
+    // 条目点击、parent 导航、popstate、首次加载都汇聚到这里。
+    sourceForm = false;
     var listed = "/api/list?path=" + encodeURIComponent(path);
     var content = "/api/content?path=" + encodeURIComponent(path);
 
