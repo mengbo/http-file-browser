@@ -118,9 +118,9 @@ body {
   text-align: right;
 }
 
-/* 目录条目可点击，有 hover 反馈。类名沿用 Change 02 的词汇：
-   entry-name 表达「这是名称列」，entry-link 表达「这一行可点」，
-   两个类分开，样式就不用靠标签名去猜哪个 span 是文件。 */
+/* 条目一律可进入（目录与文件同一条链接规则）：可点外观与 hover 反馈都挂在 entry-link 上。
+   类名沿用 Change 02 的词汇：entry-name 表达「这是名称列」，entry-link 表达「这一行可点」，
+   两个类分开，样式就不用靠标签名去猜哪个条目是目录。 */
 .entry-link {
   display: block;
   color: #0b62d0;
@@ -131,10 +131,22 @@ body {
   background: #eceef2;
 }
 
-/* 文件条目不可进入：不呈现可点击外观，避免死胡同手感。 */
-.entry > span.entry-name {
-  color: #3a3a3c;
-  cursor: default;
+/* 文件视图的内容区。长行横向滚动而不换行：代码换行会读不出缩进关系；
+   max-width: 100% 是关键——pre 的固有宽度是 max-content，不设上限时一行长代码
+   会把整个布局撑宽，320px 窄视口下 documentElement.scrollWidth 就不再等于 innerWidth。 */
+.preview {
+  margin: 0.5rem 0 0;
+  padding: 0.75rem;
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid #d8d8dc;
+  border-radius: 8px;
+  background: #ffffff;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  white-space: pre;
+  tab-size: 4;
 }
 
 .empty {
@@ -201,7 +213,8 @@ body {
     background: #2c2c2e;
   }
 
-  .entry > span.entry-name {
-    color: #d1d1d6;
+  .preview {
+    border-color: #3a3a3c;
+    background: #1c1c1e;
   }
 }

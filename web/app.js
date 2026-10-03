@@ -7,13 +7,17 @@
   var entriesEl = document.getElementById("entries");
   var entriesHeaderEl = document.getElementById("entries-header");
   var emptyEl = document.getElementById("empty");
+  var previewEl = document.getElementById("preview");
 
   // 错误提示按机器可读错误标识分支，而不是匹配服务端说明文本。
   var ERROR_TEXT = {
     not_found: "该位置不存在",
-    permission_denied: "没有读取该目录的权限",
+    permission_denied: "没有读取该位置的权限",
     not_a_directory: "该位置不是目录",
-    outside_root: "该位置超出浏览范围"
+    not_a_regular_file: "该位置不是普通文件，无法预览",
+    outside_root: "该位置超出浏览范围",
+    not_text: "这是二进制文件，无法以文本预览",
+    too_large: "文件过大，无法以文本预览"
   };
 
   var root = "";
@@ -31,6 +35,13 @@
     return base === "" ? name : base + "/" + name;
   }
 
+  // parentOf 从相对根目录的路径推出上级相对路径，根目录自身与一级条目都得到空字符串。
+  // 内容响应不带 parent（spec 只承诺 path 与 content），文件视图的上级入口因此在客户端算。
+  function parentOf(path) {
+    var cut = path.lastIndexOf("/");
+    return cut < 0 ? "" : path.slice(0, cut);
+  }
+
   function showError(text) {
     // 永远用 textContent 写入：文件名与服务端说明都可能含有需要被转义的字符。
     errorEl.textContent = text;
@@ -42,9 +53,13 @@
     errorEl.textContent = "";
   }
 
-  function renderLocation(list) {
-    var relative = list.path === "" ? "" : "/" + list.path;
-    locationEl.textContent = (root === "" ? "" : root) + relative;
+  function locationText(path) {
+    var relative = path === "" ? "" : "/" + path;
+    return (root === "" ? "" : root) + relative;
+  }
+
+  function renderLocation(path) {
+    locationEl.textContent = locationText(path);
   }
 
   function renderParent(list) {
@@ -66,26 +81,21 @@
       var item = document.createElement("li");
       item.className = "entry";
 
-      if (entry.type === "directory") {
-        var link = document.createElement("a");
-        // entry-name 表达「这是名称列」，entry-link 表达「这一行可点」；
-        // 文件条目只挂前者，样式不靠标签名去猜哪个 span 是文件。
-        link.className = "entry-name entry-link";
-        link.setAttribute("href", urlFor(joinPath(list.path, entry.name)));
-        link.textContent = entry.name;
-        link.addEventListener("click", function (event) {
-          // 前进/后退由 History API 统一处理，不让浏览器整页重载。
-          event.preventDefault();
-          navigate(joinPath(list.path, entry.name));
-        });
-        item.appendChild(link);
-      } else {
-        // 文件在本 Change 不可进入，因此不是链接，也不呈现可点击外观。
-        var label = document.createElement("span");
-        label.className = "entry-name";
-        label.textContent = entry.name;
-        item.appendChild(label);
-      }
+      // 目录与文件一律是链接：是否可读文本由服务端判定（design D5、D8）。
+      // 前端不给「可否预览」加一条分支，那份清单与服务端的清单必然漂移；
+      // 点开非文本文件时服务端回 not_text，界面据此给一句解释。
+      var link = document.createElement("a");
+      // entry-name 表达「这是名称列」，entry-link 表达「这一行可点」。
+      link.className = "entry-name entry-link";
+      var target = joinPath(list.path, entry.name);
+      link.setAttribute("href", urlFor(target));
+      link.textContent = entry.name;
+      link.addEventListener("click", function (event) {
+        // 前进/后退由 History API 统一处理，不让浏览器整页重载。
+        event.preventDefault();
+        navigate(target);
+      });
+      item.appendChild(link);
 
       item.appendChild(textCell("entry-size", formatSize(entry.size)));
       item.appendChild(textCell("entry-time", formatModifiedAt(entry.modified_at)));
@@ -137,36 +147,94 @@
     return new Date(seconds * 1000).toLocaleString();
   }
 
-  function render(list) {
-    clearError();
-    renderLocation(list);
-    renderParent(list);
-    renderEntries(list);
-  }
-
-  function renderFailure(code, message) {
+  // hideEntries 把列表视图整体收起来：文件视图与错误态都不显示条目与列名。
+  function hideEntries() {
     entriesEl.replaceChildren();
     emptyEl.hidden = true;
     entriesHeaderEl.hidden = true;
+  }
+
+  function hidePreview() {
+    previewEl.textContent = "";
+    previewEl.hidden = true;
+  }
+
+  function render(list) {
+    clearError();
+    renderLocation(list.path);
+    renderParent(list);
+    renderEntries(list);
+    hidePreview();
+  }
+
+  // renderContent 渲染文件视图。内容经 textContent 写入，绝不拼接 innerHTML：
+  // Change 02 的条目名不变量在这里扩展到文件内容本身（design D11）。
+  // 顺带说明为什么内容走 JSON 通道就是安全的：内容从不交给 HTML 解析器，
+  // 因此一个以 HTML 注释或标签开头的 .html 文件不会变成存储型 XSS。
+  function renderContent(content) {
+    clearError();
+    hideEntries();
+    renderLocation(content.path);
+    // 文件的上级就是它所在的目录；文件位于根目录时该入口指向根目录本身。
+    parentLinkEl.setAttribute("href", urlFor(parentOf(content.path)));
+    parentLinkEl.hidden = false;
+    previewEl.textContent = content.content;
+    previewEl.hidden = false;
+  }
+
+  function renderFailure(code, message) {
+    hideEntries();
+    hidePreview();
     parentLinkEl.hidden = true;
     parentLinkEl.removeAttribute("href");
-    locationEl.textContent = (root === "" ? "" : root) + "/" + currentPath();
+    locationEl.textContent = locationText(currentPath());
     showError(ERROR_TEXT[code] || message || "无法打开该位置");
   }
 
+  function fetchJSON(url) {
+    return fetch(url, { headers: { Accept: "application/json" } }).then(function (response) {
+      return response.json().then(function (body) {
+        return { ok: response.ok, body: body };
+      });
+    });
+  }
+
+  function errorCode(result) {
+    return result.body && result.body.error ? result.body.error.code : "";
+  }
+
+  function errorMessage(result) {
+    return result.body && result.body.error ? result.body.error.message : "";
+  }
+
+  // load 按响应的成败分派这次渲染列表还是预览，不预判 ?path= 指向什么（design D2）。
+  // 同一个位置参数在两个端点上指向不同类型的对象：列表成功就是目录，
+  // not_a_directory 就是文件，转问内容端点；其余失败原因两边一致，直接报错。
   function load(path) {
-    fetch("/api/list?path=" + encodeURIComponent(path), { headers: { Accept: "application/json" } })
-      .then(function (response) {
-        return response.json().then(function (body) {
-          return { ok: response.ok, body: body };
-        });
+    var listed = "/api/list?path=" + encodeURIComponent(path);
+    var content = "/api/content?path=" + encodeURIComponent(path);
+
+    fetchJSON(listed)
+      .then(function (result) {
+        if (result.ok) {
+          render(result.body);
+          return null;
+        }
+        if (errorCode(result) === "not_a_directory") {
+          return fetchJSON(content);
+        }
+        renderFailure(errorCode(result), errorMessage(result));
+        return null;
       })
       .then(function (result) {
-        if (!result.ok) {
-          renderFailure(result.body && result.body.error ? result.body.error.code : "", result.body && result.body.error ? result.body.error.message : "");
+        if (result === null) {
           return;
         }
-        render(result.body);
+        if (result.ok) {
+          renderContent(result.body);
+          return;
+        }
+        renderFailure(errorCode(result), errorMessage(result));
       })
       .catch(function (err) {
         renderFailure("", "无法连接服务：" + err.message);

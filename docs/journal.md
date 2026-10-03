@@ -72,3 +72,18 @@
 顺带一条，纠正我自己在 verify 阶段的误判：同一份 capability 里还有一对同名 Scenario（`A directory contains both directories and files` 同时挂在 `Entry type distinction` 与 `List ordering` 下）。我在 verify 报告里把它当成「Change 02 遗留的瑕疵」，**这是错的**——Change 02 的 tasks 4.5 原文写着「注意 spec 中……各有一条同名 Scenario……两个测试必须用可区分的名字，不得合并或重名」。它是当时撞到同一个碰撞后**有意保留**的：WHEN 措辞对两条 Requirement 都自然，于是差异放到测试名上区分（`TestEntryTypeIsDistinguishedInAMixedDirectory` 与 `TestDirectoriesPrecedeFilesInAMixedDirectory`）。
 
 本 Change 自己引入的那对（`The same directory is listed repeatedly`）确实该改，改在归档之前，因此 archive 副本与 spec 仍然一致。**两件事同形，处理方式却不同，差别在归属**：一个 Change 有权清理自己造成的麻烦，但不该顺手推翻另一个已归档 Change 记录在案的判断。判断一条 spec 文本是不是缺陷，要先去看当初的 Change 有没有为它做过决定——本次差点凭「看起来别扭」就动手。
+
+### 04 text-preview
+
+- 日期：2026-10-03（归档目录 `openspec/changes/archive/2026-10-03-text-preview/`）
+- 现象一（AI 把 Spec 写成实现方案）：**未发生**。四条 Requirement 全部是可观察行为——「返回该文件的规范化相对路径与该文件的内容」「以替换字符呈现」；扩展名白名单的具体清单、1 MiB 上限、先 `Stat` 后打开的判定顺序、`ToValidUTF8` 全部留在 design D6/D9/D10 与 tasks。spec 连「1 MiB」这个数字都没写（只说「超过系统可提供内容的最大字节数」），design 风险一节预言的「调整常量不动任何 Scenario」在实现里如约成立。
+- 现象二（需求变化被误做成 ADDED）：不适用（本 Change 全部 ADDED，无需求变化）。但 Change 03 journal 观察 2 的预言在本 Change 被正式推翻：它预言「Change 04 要读内容就是有意识地推翻一条 Scenario」，而 design D1 用独立端点让 `directory-browsing` 零 delta——tasks 2.9 的验证实际跑过（`git diff` 中 `browse_test.go` 无一处改动），八条既有 Requirement 与全部既有测试一行未改。**预言中的 MODIFIED 演练没有发生，因为更优的方案让那道门根本不用推**；第一次真正的 MODIFIED 演练顺延给 Change 05。
+- 现象三（Apply 偷偷扩大范围）：**发生了三起小的，全部当场报告、未静默吸收**：① 补了 tasks 未列的 `TestAnEmptyTextFileIsRequested`（零字节 `.txt` 返回成功与空内容）——断言的是 spec 已承诺行为的边界，不是新行为；② 前端 `permission_denied` 文案由「没有读取该目录的权限」改为「没有读取该位置的权限」——`ERROR_TEXT` 一张表现在同时服务目录与文件两个视图，原文案在文件视图里是错的；③ 8080 被用户自己的旧进程占用，端到端验证改用 `.verify-tmp` 下的临时宿主程序在 18099 起同一份 handler + 内嵌前端，验完即删、不落仓库。
+- 其他观察：
+  1. **守门人测试各被证伪一次，才敢说它守得住**（延续 Change 03 观察 1 的纪律）。FIFO 用例：把类型判定临时挪到 `ReadFile` 之后，用例在 5 秒超时处红掉，报错文本直指 design D10；白名单集合断言：往 `textExtensions` 塞一个没有对应用例的 `graphql`，`TestTextRecognition` 立刻红。两条守卫都不是「看起来会抓住」，是「抓到过一次」。
+  2. **tasks.md 里的引用错误只有实现能撞出来**：2.5 标注「design D8」，UTF-8 替换字符实际是 D9 的决策；1.5 说「2.5 的 `not_a_regular_file` 用例」，该用例实际构造在 2.7。propose 阶段读起来完全自洽的两处笔误，apply 第一动手就暴露——与 Change 01 观察 1 同族，但轻一个量级：错的是指针，不是内容。处理方式是按正确出处写代码注释、tasks 原文不动（archive 不可变）。
+  3. **勘误：tasks 4.4 手工验证记录里「仓库自己的 `Makefile`」措辞不准**——仓库里并没有 Makefile，那个文件在验证 fixture 里；仓库自己的无扩展名文件是 `AGENTS.md` 与 `go.mod`，失败原因相同（无扩展名 → `not_text`）。archive 已不可变，纠错记在这里。
+  4. **端到端验证的环境本身就是变量**。本机 `open()` 无法创建文件名含 `</` 的文件（报 ENOENT，疑似端点安全过滤），`<script>alert(2)</script>.txt` 造不出来，退化为 `<script>alert(2).txt`。断言于是不依赖文件名形态，改以 `#preview` 内 `img`/`script` 元素数与「关闭自动 dismiss 后 dialog 是否出现」为判据——**测试数据的构造要绕开环境的脾气，把判据放在环境碰不到的地方**。
+  5. **agent-browser 让手工验证有了代步工具，但判据仍逐条人工设计**。Change 02 观察 3 说「零构建的前端验证是真验证，但不是自动的」；这次每一项仍先写明「怎么算通过」（320px 下 `scrollWidth === innerWidth`、`#preview` 内元素数为 0、后退后 `preview.hidden === true`、各错误码对应文案），再让浏览器执行。工具替代的是点击与读值，不是判定标准——深链接、返回上级、前进后退、XSS、六种错误文案、窄视口共 11 项观察全部实测落表（tasks 4.4）。
+  6. **design D6 预言的那次失败在验证中如约发生**：fixture 里的 `Makefile` 点进去就是「这是二进制文件，无法以文本预览」。这不是回归，是本 Change 刻意保留的缺口（「先窄后宽」）。**Change 05 的动机第一次由真实点击撞出来，而不是由 roadmap 预约**——D6 说的「需求变更被现实撞出来」在归档这一刻有了实证。
+  7. **归档时确认 Purpose 仍然为真**：`text-preview` 的 Purpose 写「不包含文件类型识别能力」，本次归档后依旧成立（扩展名白名单是判定规则，不是类型识别）；Change 05 归档后它才会变假。想法池那条待办（tasks 4.5）留待届时处理，本次未动 `openspec/specs/` 下任何既有文件——本次归档唯一的 spec 写入是新建 `text-preview/spec.md`。

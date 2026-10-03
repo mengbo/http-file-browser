@@ -29,6 +29,10 @@
     <ul id="entries" class="entries"></ul>
 
     <p id="empty" class="empty" hidden>此目录为空</p>
+
+    <!-- 文件视图：列表三列与空目录提示都让位给内容。内容经 textContent 写入，
+         这个元素永远不交给 HTML 解析器（design D11）。 -->
+    <pre id="preview" class="preview" hidden></pre>
   </main>
   <script src="/app.js"></script>
 </body>

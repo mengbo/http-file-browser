@@ -15,13 +15,29 @@ const (
 	codeOutsideRoot      = "outside_root"
 )
 
+// 内容读取独有的三个失败原因（design D8、D10）。前四个的语义绑定目录列表，
+// 由 directory-browsing 的 Directory access failures 承诺，取值一字不改。
+const (
+	// codeNotText 是路径存在、可读、但不被视为可读文本的文件：名字的扩展名不在白名单内。
+	codeNotText = "not_text"
+	// codeTooLarge 是超过可提供内容的最大字节数。
+	codeTooLarge = "too_large"
+	// codeNotARegularFile 是路径存在但不是普通文件（命名管道、Socket、设备）。
+	// 它是唯一能避免「打开命名管道永久阻塞」的标识，而先 Stat 后判定让它的成本接近零。
+	codeNotARegularFile = "not_a_regular_file"
+)
+
 // codeStatus 把错误标识映射到 HTTP 状态码。
 // outside_root 用 400 而非 403：越界是请求路径本身不合法，不是身份受限。
+// 新增三个同样是 400：它们描述的都是「这个请求的内容端点给不出」，不是身份问题。
 var codeStatus = map[string]int{
 	codeNotFound:         http.StatusNotFound,
 	codeNotADirectory:    http.StatusBadRequest,
 	codePermissionDenied: http.StatusForbidden,
 	codeOutsideRoot:      http.StatusBadRequest,
+	codeNotText:          http.StatusBadRequest,
+	codeTooLarge:         http.StatusBadRequest,
+	codeNotARegularFile:  http.StatusBadRequest,
 }
 
 // browser 持有命令行指定的根目录，目录列表端点以它为唯一的越界判定基准。
@@ -59,6 +75,8 @@ func apiHandler(b *browser) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/health", b.handleHealth)
 	mux.HandleFunc("/api/list", b.handleList)
+	// 内容走独立端点，列表响应继续不携带任何条目内容（design D1）。
+	mux.HandleFunc("/api/content", b.handleContent)
 	mux.HandleFunc("/api/", b.handleAPINotFound)
 	return mux
 }
