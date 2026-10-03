@@ -38,7 +38,7 @@
 
 | # | Change | 目标 | 备注 | 状态 |
 |---|--------|------|------|------|
-| 01 | `bootstrap-http-server` | 最小 HTTP 服务 | 建立项目骨架；新增 capability `service-startup` | 🚧 |
+| 01 | `bootstrap-http-server` | 最小 HTTP 服务 | 建立项目骨架；新增 capability `service-startup` | ✅ [`2026-10-03-bootstrap-http-server`](changes/archive/2026-10-03-bootstrap-http-server/) |
 | 02 | `directory-browsing` | Finder 风格目录浏览 | 第一个核心 capability | 💡 |
 | 03 | `file-metadata` | 文件信息展示 | | 💡 |
 | 04 | `text-preview` | 文本文件查看 | | 💡 |
