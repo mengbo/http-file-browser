@@ -565,7 +565,7 @@ func TestTheFIFORequestReturnsWithoutBlocking(t *testing.T) {
 func TestEveryKnownErrorCodeIsMappedToAStatus(t *testing.T) {
 	for _, code := range []string{
 		codeNotFound, codeNotADirectory, codePermissionDenied, codeOutsideRoot,
-		codeNotText, codeTooLarge, codeNotARegularFile,
+		codeNotText, codeTooLarge, codeNotARegularFile, codeNotAnImage,
 	} {
 		if _, ok := codeStatus[code]; !ok {
 			t.Errorf("codeStatus 里没有 %q，writeError 会退回 500", code)

@@ -27,9 +27,16 @@ const (
 	codeNotARegularFile = "not_a_regular_file"
 )
 
+// codeNotAnImage 是图片内容端点独有的失败原因（image-preview design D2）：
+// 名字的扩展名不在图片白名单内即拒绝，不读内容、不验魔数；无扩展名不嗅探。
+const (
+	// codeNotAnImage 是路径存在、可读、但不被视为图片文件的文件。
+	codeNotAnImage = "not_an_image"
+)
+
 // codeStatus 把错误标识映射到 HTTP 状态码。
 // outside_root 用 400 而非 403：越界是请求路径本身不合法，不是身份受限。
-// 新增三个同样是 400：它们描述的都是「这个请求的内容端点给不出」，不是身份问题。
+// 其余 400 的各条描述的都是「这个请求的目标给不出所请求的呈现」，不是身份问题。
 var codeStatus = map[string]int{
 	codeNotFound:         http.StatusNotFound,
 	codeNotADirectory:    http.StatusBadRequest,
@@ -38,6 +45,7 @@ var codeStatus = map[string]int{
 	codeNotText:          http.StatusBadRequest,
 	codeTooLarge:         http.StatusBadRequest,
 	codeNotARegularFile:  http.StatusBadRequest,
+	codeNotAnImage:       http.StatusBadRequest,
 }
 
 // browser 持有命令行指定的根目录，目录列表端点以它为唯一的越界判定基准。
@@ -77,6 +85,9 @@ func apiHandler(b *browser) http.Handler {
 	mux.HandleFunc("/api/list", b.handleList)
 	// 内容走独立端点，列表响应继续不携带任何条目内容（design D1）。
 	mux.HandleFunc("/api/content", b.handleContent)
+	// 图片内容端点：/api/ 分区里唯一的非 JSON 成功响应（service-startup MODIFIED 的开口，
+	// image-preview design D1）；错误响应仍走 JSON 信封。
+	mux.HandleFunc("/api/image", b.handleImage)
 	mux.HandleFunc("/api/", b.handleAPINotFound)
 	return mux
 }

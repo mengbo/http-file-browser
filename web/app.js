@@ -8,6 +8,8 @@
   var entriesHeaderEl = document.getElementById("entries-header");
   var emptyEl = document.getElementById("empty");
   var previewEl = document.getElementById("preview");
+  var imageViewEl = document.getElementById("image-view");
+  var imageFallbackEl = document.getElementById("image-fallback");
   var formToggleEl = document.getElementById("form-toggle");
 
   // 错误提示按机器可读错误标识分支，而不是匹配服务端说明文本。
@@ -18,7 +20,8 @@
     not_a_regular_file: "该位置不是普通文件，无法预览",
     outside_root: "该位置超出浏览范围",
     not_text: "这是二进制文件，无法以文本预览",
-    too_large: "文件过大，无法以文本预览"
+    too_large: "文件过大，无法以文本预览",
+    not_an_image: "该文件不是可识别的图片文件"
   };
 
   var root = "";
@@ -178,10 +181,18 @@
   function hidePreview() {
     // 按钮状态随视图重算，不依赖上次状态（design D3）：目录与错误态不经过 renderContent，
     // 在这里一并隐藏；文件视图的载荷一并作废，切换无从谈起。
+    // 图片视图（image-preview design D5）与 #preview 平级、同受这里清理：src 摘除即在途
+    // 加载作废（removeAttribute 而非赋空串——空串会被解析成页面 URL 触发一次注定失败的
+    // 加载），回退说明一并收起，切换目录后不留上一张图的残影。
     formToggleEl.hidden = true;
     currentFile = null;
     previewEl.textContent = "";
     previewEl.hidden = true;
+    imageViewEl.hidden = true;
+    imageViewEl.classList.remove("loading");
+    imageViewEl.removeAttribute("src");
+    imageFallbackEl.hidden = true;
+    imageFallbackEl.textContent = "";
   }
 
   function render(list) {
@@ -234,6 +245,20 @@
 
   function isMarkdownPath(path) {
     return MARKDOWN_EXTENSIONS[extensionOf(path)] === true;
+  }
+
+  // ============ 图片识别分派（image-preview，design D4）============
+
+  // D4 图片识别：与 MARKDOWN_EXTENSIONS 同形的扩展名装饰映射（装饰非门）——判错的代价
+  // 只是走错呈现管线，门始终在服务端。与后端 internal/server/image.go 的 imageExtensions
+  // 各自独立声明、注释互引提醒同步；漂移两个方向都无害（design D4 的论证）：
+  // 前端认了后端不认 → <img> 收到 JSON 错误响应体 → onerror → 回退说明（诚实）；
+  // 后端认了前端没认 → 落回 content 端点 → not_text「这是二进制文件」（少预览了，但不是谎言）。
+  // 服务端的门始终是唯一判定者。svg 刻意缺席：文本型图像，记入想法池独立立 Change。
+  var IMAGE_EXTENSIONS = { png: true, jpg: true, jpeg: true, gif: true, webp: true, bmp: true, ico: true, avif: true };
+
+  function isImagePath(path) {
+    return IMAGE_EXTENSIONS[extensionOf(path)] === true;
   }
 
   // D6 代码块高亮钩子：fence 语言串经 hljs 别名表命中即按该语言 highlight；无标注（lang 为空）
@@ -389,6 +414,9 @@
   // 与素文本殊途同归——#preview 的 textContent 永远等于文件内容，高亮只是着色，不增删改任何字符
   // （spec: Content preservation under highlighting）。渲染路径的行为由 markdown-preview 定义：
   // 渲染未成功整段回退素文本、不报错，回退仍属渲染形式的呈现。
+  // 图片文件（image-preview）不经过本函数、也不进 #preview：这里的不变量——textContent 等于
+  // 文件内容或承载渲染 HTML——与图片字节都不符，它由独立的 #image-view 承载（design D5），
+  // 上方两套 HTML 防线对它无需适用（整条路径不产生任何 HTML 字符串）。
   function renderContent(content) {
     clearError();
     hideEntries();
@@ -463,6 +491,50 @@
     renderContent(currentFile);
   });
 
+  // ============ 图片视图（image-preview，design D5）============
+
+  // renderImage 渲染图片文件视图。图片不进 #preview：那里的不变量是「textContent 等于
+  // 文件内容」（素文本/高亮路径）或「承载渲染 HTML」（Markdown 路径），图片字节不属于
+  // 任何一种，由独立挂载点承载（design D5 的不变量论证），两套 HTML 写入防线对它无需适用。
+  // 呈现形式切换按钮对图片文件隐藏：光栅图没有第二种呈现形式（hidePreview 已一并收起，
+  // currentFile 保持 null 让切换动作无从触发）。
+  function renderImage(path) {
+    hidePreview();
+    clearError();
+    hideEntries();
+    renderLocation(path);
+    // 位置显示用点击目标的路径（列表条目 + joinPath 构造，本就规范化）；上级就是文件
+    // 所在目录，上级入口沿用 parentOf 客户端推导，零变化（design D5）。
+    parentLinkEl.setAttribute("href", urlFor(parentOf(path)));
+    parentLinkEl.hidden = false;
+
+    // 状态先于 src 就位：error 最迟在下一轮任务循环触发，加载态与回退说明必须先收好。
+    // src 指向图片内容端点；图片路径不请求 /api/content，零浪费请求（design D4）。
+    imageViewEl.classList.add("loading");
+    imageViewEl.alt = path.slice(path.lastIndexOf("/") + 1);
+    imageViewEl.hidden = false;
+    imageViewEl.src = "/api/image?path=" + encodeURIComponent(path);
+  }
+
+  // load 移除加载态；error 呈现回退说明（design D5）：不留静默破图占位。路径级失败
+  // （not_found 等）经 <img> 与解码失败同样塌缩为 error 事件、同一回退说明——spec 只承诺
+  // 「回退说明出现」，与塌缩现实一致。不写 #error：这是「这份内容看不了」的呈现层事实，
+  // 不是服务错误。
+  imageViewEl.addEventListener("load", function () {
+    imageViewEl.classList.remove("loading");
+  });
+
+  imageViewEl.addEventListener("error", function () {
+    // 视图已被 hidePreview 收走（加载途中切换了目录/文件）时，迟到的失败不再呈现任何东西。
+    if (imageViewEl.hidden) {
+      return;
+    }
+    imageViewEl.classList.remove("loading");
+    imageViewEl.hidden = true;
+    imageFallbackEl.textContent = "无法以图片查看该文件";
+    imageFallbackEl.hidden = false;
+  });
+
   function renderFailure(code, message) {
     hideEntries();
     hidePreview();
@@ -505,6 +577,12 @@
           return null;
         }
         if (errorCode(result) === "not_a_directory") {
+          // 图片扩展名直接进图片视图，不请求 /api/content（design D4：零浪费请求）；
+          // 其余走既有 content 流程，行为零变化——分派只加分支不改旧路。
+          if (isImagePath(path)) {
+            renderImage(path);
+            return null;
+          }
           return fetchJSON(content);
         }
         renderFailure(errorCode(result), errorMessage(result));

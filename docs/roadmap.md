@@ -46,7 +46,7 @@
 | 06 | `add-syntax-highlighting` | 代码语法高亮 | 验收策略先立 [ADR-0003](adr/0003-presentation-acceptance.md)：呈现层 Scenario 按性质分派断言位置 | ✅ [`2026-10-03-add-syntax-highlighting`](changes/archive/2026-10-03-add-syntax-highlighting/) |
 | 07 | `add-markdown-preview` | Markdown 渲染 | 携带 syntax-highlighting MODIFIED：渲染形式的 `.md` 整体让渡给 `markdown-preview`（条件挂呈现形式，为 08 源码视图留位） | ✅ [`2026-10-03-add-markdown-preview`](changes/archive/2026-10-03-add-markdown-preview/) |
 | 08 | `improve-markdown-preview` | 渲染/源码视图切换 | 第二次需求变更，MODIFIED 演练；兑现 07 的「条件挂呈现形式」留位，syntax-highlighting 零 delta | ✅ [`2026-10-03-improve-markdown-preview`](changes/archive/2026-10-03-improve-markdown-preview/) |
-| 09 | `add-image-preview` | 图片预览 | | 💡 |
+| 09 | `add-image-preview` | 图片预览 | 携带 service-startup MODIFIED：`/api/` 分区为图片字节开口；SVG 记入想法池 | 🚧 |
 | 10 | `add-file-search` | 文件搜索 | | 💡 |
 | 11 | `add-file-editing` | 文件编辑与保存 | 先 Explore 保存语义 | 💡 |
 | 12 | `add-edit-conflict-detection` | 编辑期间检测外部修改 | | 💡 |
@@ -80,6 +80,7 @@
 尚未规划为 Change 的点子。立 Change 时从这里认领或新增。
 
 - **符号链接越界策略**（Change 02 起悬置）：`directory-browsing` 明确只做**字面**路径的越界判定，根目录内指向外部的符号链接可被跟随，spec 已如实承诺这一强度。回环单用户下风险可接受，但 `add-remote-access`（Change 13）开放非回环监听**之前**必须先用 MODIFIED 正式化该策略，否则等于开放远程任意文件读取。
+- **SVG 图片预览**（Change 09 探索切出的边界物，proposal Non-Goal）：SVG 是文本与图像的交界，进图片预览要同时拖三件事——`text-preview` 的文本白名单要纳入 `svg`（否则内容端点先以 `not_text` 拦下）；图片识别表与呈现形式要为「文本型图像」推广（渲染/源码两种形式是光栅图没有的）；浏览器直接打开 SVG URL 等于执行其中脚本（`<img>` 上下文不执行脚本、直接访问执行，安全面完全不同）。三件事一起独立立 Change。
 - **大目录分页**：目录列表一次性返回全部条目，十万级文件目录会产生很大响应体。若要分页会改变 `Directory listing response` 的响应形状，属新增 Requirement，需独立 Change。
 - **`parent` 空值的二义性**（design D10 记录）：根目录与根目录的一级子目录，其 `parent` 都是空字符串，客户端必须靠 `path` 判断是否在根目录。当前刻意不为它引入 `null` 第二种表示；若 Change 03 的面包屑或后续 Change 发现按 `parent` 推断根目录更方便，再用 MODIFIED `Parent directory reference` 把根目录的 `parent` 正式化为 `null` 或缺省。
 - **符号链接的条目类型**（design D12 记录）：指向目录的符号链接目前显示为 `file` 且不可点击，但按其字面路径请求能列出目标内容——「字面路径可提供」与「字面报告为文件」是同一个 D3 决策的两面。等有 Change 要展示「种类」时一并决定是否把符号链接作为第三类条目，届时 MODIFIED `Entry type distinction`。

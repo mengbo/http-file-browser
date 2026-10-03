@@ -170,6 +170,45 @@ body {
   border-color: #0b62d0;
 }
 
+/* ============ 图片视图（image-preview）============ */
+
+/* 与 .preview 同一纸面语言：白底、圆角、细边框。display: block + 水平 auto 边距让图片
+   在文件视图内居中；max-width: 100% 防超宽图片撑破布局（同 .preview 的既有取舍），
+   高度按比例收缩，320px 窄视口下不产生横向滚动。 */
+.image-view {
+  display: block;
+  margin: 0.5rem auto 0;
+  max-width: 100%;
+  border: 1px solid #d8d8dc;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+/* 加载态：src 已就位、load/error 未到之间的空窗。min-height 给布局一个稳定的占位高度，
+   呼吸动画说明「正在取图」而非「图是坏的」；两个终态（呈现、回退说明）都会移除该类。 */
+.image-view.loading {
+  min-height: 12rem;
+  animation: image-loading 1.2s ease-in-out infinite alternate;
+}
+
+@keyframes image-loading {
+  from { opacity: 0.55; }
+  to { opacity: 1; }
+}
+
+/* 回退说明（design D5）：图片加载不成的诚实交代。中性灰与虚线边框，刻意不用 .error 的
+   红色警示样式——这是「这份内容看不了」的呈现层事实，不是服务错误；静默破图占位
+   才等于装作看见了。 */
+.image-fallback {
+  margin: 0.5rem 0 0;
+  padding: 0.75rem;
+  border: 1px dashed #d8d8dc;
+  border-radius: 8px;
+  color: #6e6e73;
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
 .empty {
   margin: 1.25rem 0 0;
   color: #6e6e73;
@@ -390,6 +429,16 @@ body {
 
   .form-toggle:hover {
     border-color: #64a8ff;
+  }
+
+  .image-view {
+    border-color: #3a3a3c;
+    background: #2c2c2e;
+  }
+
+  .image-fallback {
+    border-color: #3a3a3c;
+    color: #98989d;
   }
 
   .entry {
