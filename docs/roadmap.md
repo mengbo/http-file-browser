@@ -39,7 +39,7 @@
 | # | Change | 目标 | 备注 | 状态 |
 |---|--------|------|------|------|
 | 01 | `bootstrap-http-server` | 最小 HTTP 服务 | 建立项目骨架；新增 capability `service-startup` | ✅ [`2026-10-03-bootstrap-http-server`](changes/archive/2026-10-03-bootstrap-http-server/) |
-| 02 | `directory-browsing` | Finder 风格目录浏览 | 第一个核心 capability | 🚧 |
+| 02 | `directory-browsing` | Finder 风格目录浏览 | 第一个核心 capability | ✅ [`2026-10-03-directory-browsing`](changes/archive/2026-10-03-directory-browsing/) |
 | 03 | `file-metadata` | 文件信息展示 | | 💡 |
 | 04 | `text-preview` | 文本文件查看 | | 💡 |
 | 05 | `improve-text-file-detection` | 无扩展名文本文件可预览 | 第一次需求变更，MODIFIED 演练 | 💡 |
@@ -64,6 +64,7 @@
 立 Change 时按需增补。已产生的：
 
 - `service-startup`（Change 01）：命令行启动契约 + HTTP 响应分区（静态页 vs `/api/` JSON、JSON 错误信封、默认仅监听回环）。不含目录浏览语义。
+- `directory-browsing`（Change 02）：根目录内的目录列表契约——响应形状（`path`/`parent`/`entries`）、条目类型区分、列表顺序、相对路径导航模型、上级目录语义、根目录边界。**不含**文件元信息与文件内容读取。
 
 ## MVP 明确不做
 

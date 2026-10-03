@@ -6,7 +6,9 @@
 
 ## 当前状态
 
-✅ Change 01 `bootstrap-http-server` 已归档：命令行启动服务、返回内嵌前端页面、`/api/health` 前后端往返均可用，行为规范见 [openspec/specs/service-startup/](openspec/specs/service-startup/)。目录浏览尚未实现。整体进度见 [docs/roadmap.md](docs/roadmap.md)。
+✅ Change 02 `directory-browsing` 已归档：浏览器中可按 Finder 风格浏览命令行指定的根目录——进入子目录、返回上级、看到当前位置，浏览位置镜像到地址栏（刷新停留在原目录、前进/后退可用、当前目录可作深链接）。列表只含名称与类型，顺序为「目录在前 + 名称不区分大小写 + 原名 tiebreak」。服务不提供根目录之外的内容。行为规范见 [openspec/specs/directory-browsing/](openspec/specs/directory-browsing/) 与 [openspec/specs/service-startup/](openspec/specs/service-startup/)。
+
+尚未实现：文件元信息、文件内容预览、编辑、远程访问。整体进度见 [docs/roadmap.md](docs/roadmap.md)。
 
 ## 快速开始
 
@@ -23,13 +25,16 @@ go build -o http-file-browser .
 服务已就绪，访问 http://127.0.0.1:8080 浏览 /path/to/dir
 ```
 
-在浏览器打开该地址即可看到前端页面显示「服务就绪」。
+在浏览器打开该地址即可看到该目录的条目列表。
 
 几点说明：
 
 - 目录参数是必需的。缺失、路径不存在或路径不是目录时，程序向标准错误输出中文原因并以非零状态退出，不会启动服务。
 - 服务默认只监听 `127.0.0.1:8080`，本机之外的主机无法连接。端口被占用时直接报错退出，不会自动顺延。
 - 前端页面与静态资源内嵌在二进制中，产物可以单独拷走运行，不需要随附资源目录。
+- 当前只能浏览目录。文件条目会列出但不可点击，内容读取与预览属于后续 Change。
+- 浏览位置用相对根目录的路径表示（形如 `/?path=docs/api`），因此深链接可以跨机器复用：同一个 `?path=docs` 在以另一个根目录启动的服务上照样能打开。
+
 
 ## 文档
 
