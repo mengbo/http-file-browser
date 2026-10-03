@@ -16,6 +16,15 @@
 
 零配置 HTTP 文件浏览器：命令行指定目录即启动服务，浏览器中像 macOS Finder 一样浏览文件系统。同时本项目是 OpenSpec SDD 学习实验场——优先验证完整工作流（Explore → Propose → Apply → Verify → Archive → 需求变更演练），不追求一次把产品做完。
 
+长期约束（2026-10-03 架构探索确定，详见 [docs/adr/](adr/)）：跨平台分发（macOS/Linux/Windows），UI 风格借鉴 macOS Finder；单二进制交付——Go、前端资源内嵌、不依赖语言 runtime；前端为零构建 vanilla JS 静态应用，后端只提供 JSON API；安全默认——默认只听 `127.0.0.1`、默认只读，开放远程访问/写入必须显式指定（Phase 4 时正式 ADR 化）。
+
+## 架构决策
+
+| ADR | 决策 | 状态 |
+|---|------|------|
+| [0001](adr/0001-go-single-binary.md) | 技术栈选 Go，单二进制交付 | accepted |
+| [0002](adr/0002-frontend-json-api-embedded-static.md) | 前后端分离：JSON API + 内嵌零构建静态前端 | accepted |
+
 ## 阶段规划
 
 1. **浏览与预览（MVP）**：目录浏览、文件/目录图标、进入/返回上级、文件基本信息、文本文件查看

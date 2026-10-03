@@ -37,6 +37,7 @@
 ## 语言约定
 
 - 文档与 Spec 正文一律中文。
+- AI 与用户的对话也使用中文，与文档/Spec 保持一致。
 - OpenSpec 结构标记保留英文格式：`### Requirement:` / `#### Scenario:` / `## ADDED|MODIFIED|REMOVED|RENAMED Requirements` / `**WHEN**` / `**THEN**`（与 `openspec/config.yaml` 一致）。
 
 ## Git 约定
