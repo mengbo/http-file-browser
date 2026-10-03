@@ -19,6 +19,13 @@
       <a id="parent-link" class="parent-link" href="/" hidden>↑ 上级目录</a>
     </nav>
 
+    <!-- 列名行在零条目时由 app.js 隐藏：一个描述零行的表头没有意义。 -->
+    <div id="entries-header" class="entries-header" aria-hidden="true">
+      <span class="entry-head">名称</span>
+      <span class="entry-size">大小</span>
+      <span class="entry-time">修改时间</span>
+    </div>
+
     <ul id="entries" class="entries"></ul>
 
     <p id="empty" class="empty" hidden>此目录为空</p>

@@ -5,6 +5,7 @@
   var errorEl = document.getElementById("error");
   var parentLinkEl = document.getElementById("parent-link");
   var entriesEl = document.getElementById("entries");
+  var entriesHeaderEl = document.getElementById("entries-header");
   var emptyEl = document.getElementById("empty");
 
   // 错误提示按机器可读错误标识分支，而不是匹配服务端说明文本。
@@ -67,7 +68,9 @@
 
       if (entry.type === "directory") {
         var link = document.createElement("a");
-        link.className = "entry-link";
+        // entry-name 表达「这是名称列」，entry-link 表达「这一行可点」；
+        // 文件条目只挂前者，样式不靠标签名去猜哪个 span 是文件。
+        link.className = "entry-name entry-link";
         link.setAttribute("href", urlFor(joinPath(list.path, entry.name)));
         link.textContent = entry.name;
         link.addEventListener("click", function (event) {
@@ -84,10 +87,54 @@
         item.appendChild(label);
       }
 
+      item.appendChild(textCell("entry-size", formatSize(entry.size)));
+      item.appendChild(textCell("entry-time", formatModifiedAt(entry.modified_at)));
+
       entriesEl.appendChild(item);
     });
 
     emptyEl.hidden = list.entries.length !== 0;
+    // 列名行跟着条目数走：零行时三个列名没有对应的列。
+    // 隐藏靠 style.css 顶部的 [hidden] 兜底规则，不在这里另写 display（Change 02 观察 2）。
+    entriesHeaderEl.hidden = list.entries.length === 0;
+  }
+
+  // textCell 建一个只装文本的单元格。条目名的 textContent 不变量覆盖全部三个字段：
+  // 元信息不可得时传入空字符串，这一列就留空，而不是显示占位符（design D7）。
+  function textCell(className, text) {
+    var cell = document.createElement("span");
+    cell.className = className;
+    cell.textContent = text;
+    return cell;
+  }
+
+  // formatSize 把字节数渲染为人类可读形式。
+  function formatSize(bytes) {
+    if (typeof bytes !== "number" || !isFinite(bytes)) {
+      return "";
+    }
+    if (bytes < 1024) {
+      return bytes + " B";
+    }
+    var units = ["KB", "MB", "GB", "TB"];
+    var value = bytes / 1024;
+    var index = 0;
+    while (value >= 1024 && index < units.length - 1) {
+      value = value / 1024;
+      index = index + 1;
+    }
+    return value.toFixed(1) + " " + units[index];
+  }
+
+  // formatModifiedAt 把 Unix 整秒渲染为本时区的可读形式。
+  // 服务端保证的是「取值」与时区无关（design D6），显示字符串本就是本地化的——
+  // 同一目录在两台时区不同的机器上看到不同的日期字符串是正确的，不是缺陷。
+  function formatModifiedAt(seconds) {
+    if (typeof seconds !== "number" || !isFinite(seconds)) {
+      return "";
+    }
+    // Date 构造器吃毫秒，秒/毫秒差一千倍是这里最容易犯的错。
+    return new Date(seconds * 1000).toLocaleString();
   }
 
   function render(list) {
@@ -100,6 +147,7 @@
   function renderFailure(code, message) {
     entriesEl.replaceChildren();
     emptyEl.hidden = true;
+    entriesHeaderEl.hidden = true;
     parentLinkEl.hidden = true;
     parentLinkEl.removeAttribute("href");
     locationEl.textContent = (root === "" ? "" : root) + "/" + currentPath();

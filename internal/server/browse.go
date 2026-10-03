@@ -21,6 +21,12 @@ const (
 type listEntry struct {
 	Name string `json:"name"`
 	Type string `json:"type"`
+	// Size 是条目自身占用的字节数；符号链接条目取链接自身的长度而非目标内容的大小。
+	// 目录条目与元信息不可得的条目不出现该字段（design D5：缺省而非 null）。
+	Size *int64 `json:"size,omitempty"`
+	// ModifiedAt 是自 Unix 纪元起的整秒，不用可读字符串：取值必须与时区和 locale
+	// 无关地逐字节可复现（design D6）。元信息不可得时同样不出现该字段。
+	ModifiedAt *int64 `json:"modified_at,omitempty"`
 }
 
 type listResponse struct {
@@ -78,11 +84,38 @@ func (b *browser) list(rel string) (*listResponse, *apiError) {
 		if item.IsDir() {
 			entry.Type = entryDirectory
 		}
+		b.fillMetadata(&entry, item)
 		entries = append(entries, entry)
 	}
 	sortEntries(entries)
 
 	return &listResponse{Path: normalized, Parent: parentOf(normalized), Entries: entries}, nil
+}
+
+// fillMetadata 用 b.entryInfo 补上条目的大小与最后修改时间（design D4、D5、D6、D7）。
+//
+// 取数走 DirEntry.Info()（lstat 语义）而不是 os.Stat：后者跟随符号链接，会让根目录内
+// 一个指向外部的软链报出根目录之外那个目标的真实大小，而同一响应里的越界判定还在说
+// 「这在根目录内」。检测不是解析，因此 lstat 不触碰 design D3 的任何承诺。
+//
+// 目录条目只给修改时间、不给大小。取数失败时两个字段都省略，但条目本身保留——
+// DirEntry.Info 文档明确写了条目可能在 readdir 之后消失，那在构建产物或正在下载的
+// 目录里会偶发触发，此时整个列表失败是不可接受的（design D7）。
+func (b *browser) fillMetadata(entry *listEntry, item fs.DirEntry) {
+	info, err := b.entryInfo(item)
+	if err != nil {
+		return
+	}
+
+	// 直接取 Unix 整秒，不做任何时区或本地化格式化：格式化会让同一个文件在不同
+	// 运行环境下返回不同字符串，与「顺序可复现」的同一价值观冲突（design D6）。
+	modified := info.ModTime().Unix()
+	entry.ModifiedAt = &modified
+
+	if entry.Type != entryDirectory {
+		size := info.Size()
+		entry.Size = &size
+	}
 }
 
 // resolve 把相对根目录的浏览位置解析为绝对路径与规范化后的相对路径。
@@ -125,8 +158,9 @@ func parentOf(normalized string) string {
 }
 
 // sortEntries 用 (非目录在前, 大小写折叠后的名称, 原名) 三元组排序（design D5）。
-// 第三段是必需的：sort.Slice 不稳定，缺了它 README/readme 这类仅大小写不同的条目
-// 每次请求的相对顺序都会抖动。
+// 大小与最后修改时间不参与排序：同一目录内容未变时排序键必须只由名称决定，
+// 否则一个只改了修改时间的文件会在两次请求之间跳位。第三段是必需的：sort.Slice
+// 不稳定，缺了它 README/readme 这类仅大小写不同的条目每次请求的相对顺序都会抖动。
 //
 // 用 strings.ToLower 做简单大小写折叠而非 locale 排序：locale 排序依赖运行环境语言，
 // 与「顺序可复现」的 Scenario 冲突。代价是中文名按码位而非拼音排列。

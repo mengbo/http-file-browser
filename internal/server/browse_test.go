@@ -2,6 +2,8 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -10,12 +12,23 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 func newAPI(t *testing.T) (http.Handler, string) {
 	t.Helper()
 	root := t.TempDir()
 	return NewAPIHandler(root), root
+}
+
+// newAPIWithBrowserInfo 走 design D9 的 seam：替换条目元信息的取数函数后再装配路由。
+// 生产路径上的默认实现是 DirEntry.Info，被替换的只有这一个字段。
+func newAPIWithBrowserInfo(t *testing.T, entryInfo func(fs.DirEntry) (fs.FileInfo, error)) (http.Handler, string) {
+	t.Helper()
+	root := t.TempDir()
+	b := newBrowser(root)
+	b.entryInfo = entryInfo
+	return apiHandler(b), root
 }
 
 func get(t *testing.T, handler http.Handler, target string) *httptest.ResponseRecorder {
@@ -90,6 +103,22 @@ func writeFile(t *testing.T, name string) string {
 	return name
 }
 
+func writeContent(t *testing.T, name, content string) string {
+	t.Helper()
+	if err := os.WriteFile(name, []byte(content), 0o644); err != nil {
+		t.Fatalf("准备文件 %s 失败：%v", name, err)
+	}
+	return name
+}
+
+// setModTime 把条目的修改时间固定到给定的时刻，让 modified_at 的断言不依赖运行时刻。
+func setModTime(t *testing.T, name string, stamp time.Time) {
+	t.Helper()
+	if err := os.Chtimes(name, stamp, stamp); err != nil {
+		t.Fatalf("设置 %s 的修改时间失败：%v", name, err)
+	}
+}
+
 func names(entries []listEntry) []string {
 	out := make([]string, 0, len(entries))
 	for _, entry := range entries {
@@ -107,12 +136,51 @@ func typeOf(entries []listEntry, name string) string {
 	return ""
 }
 
+// findEntry 按名称取条目。用例里的断言一律经它取，而不是按下标——
+// 排序键是名称，按下标断言等于把顺序写死两遍。
+func findEntry(t *testing.T, entries []listEntry, name string) listEntry {
+	t.Helper()
+	for _, entry := range entries {
+		if entry.Name == name {
+			return entry
+		}
+	}
+	t.Fatalf("列表中没有名为 %q 的条目，实际为 %v", name, names(entries))
+	return listEntry{}
+}
+
+// rawEntries 把响应解成 map 而不是结构体，用来看清字段「是否出现」。
+// 结构体解不出来与字段不存在是同一种结果，无法区分这两种情况，
+// 而 Entry metadata 承诺的正是缺省而非 null（design D5）。
+func rawEntries(t *testing.T, recorder *httptest.ResponseRecorder) []map[string]any {
+	t.Helper()
+	var raw struct {
+		Entries []map[string]any `json:"entries"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &raw); err != nil {
+		t.Fatalf("响应体不是可反序列化的 JSON：%v", err)
+	}
+	return raw.Entries
+}
+
+// fieldNames 给出某个条目实际出现的字段名，按名称排序以便与字面量列表比对。
+func fieldNames(entry map[string]any) []string {
+	fields := make([]string, 0, len(entry))
+	for field := range entry {
+		fields = append(fields, field)
+	}
+	slices.Sort(fields)
+	return fields
+}
+
 // --- Directory listing response ---
 
 func TestADirectoryIsListed(t *testing.T) {
 	handler, root := newAPI(t)
 	mkdir(t, root, "docs")
-	writeFile(t, filepath.Join(root, "docs", "readme.md"))
+	// 内容用一个在响应里绝不该出现的标记串，这样「响应不含条目内容」才是一条能失败的断言。
+	const content = "READMECONTENTMARKER"
+	writeContent(t, filepath.Join(root, "docs", "readme.md"), content)
 
 	body := decodeList(t, get(t, handler, listURL("docs")))
 
@@ -126,23 +194,19 @@ func TestADirectoryIsListed(t *testing.T) {
 		t.Errorf("entries = %v，期望 [readme.md]", got)
 	}
 
-	// 条目只带 name 与 type：结构大小写之外的额外字段（大小、修改时间、内容）都不得出现。
-	var raw struct {
-		Entries []map[string]any `json:"entries"`
+	// 条目字段恰为 name/type/size/modified_at：结构之外的额外字段（尤其是承载内容的那类）都不得出现。
+	recorder := get(t, handler, listURL("docs"))
+	raw := rawEntries(t, recorder)
+	if len(raw) != 1 {
+		t.Fatalf("entries = %v，期望恰好一个条目", raw)
 	}
-	if err := json.Unmarshal(get(t, handler, listURL("docs")).Body.Bytes(), &raw); err != nil {
-		t.Fatalf("响应体不是可反序列化的 JSON：%v", err)
+	if got, want := fieldNames(raw[0]), []string{"modified_at", "name", "size", "type"}; !slices.Equal(got, want) {
+		t.Errorf("条目字段 = %v，期望恰为 %v", got, want)
 	}
-	if len(raw.Entries) != 1 {
-		t.Fatalf("entries = %v，期望恰好一个条目", raw.Entries)
-	}
-	keys := make([]string, 0, len(raw.Entries[0]))
-	for key := range raw.Entries[0] {
-		keys = append(keys, key)
-	}
-	slices.Sort(keys)
-	if !slices.Equal(keys, []string{"name", "type"}) {
-		t.Errorf("条目字段 = %v，期望恰为 [name type]", keys)
+
+	// Scenario `A listed directory contains readable files`：文件只以元信息出现。
+	if strings.Contains(recorder.Body.String(), content) {
+		t.Errorf("列表响应带回了文件内容：%q", recorder.Body.String())
 	}
 }
 
@@ -319,6 +383,223 @@ func TestRepeatedListingsOfTheSameDirectoryReturnTheSameOrder(t *testing.T) {
 
 	if !slices.Equal(names(first.Entries), names(second.Entries)) {
 		t.Errorf("两次请求的顺序不一致：%v 与 %v", names(first.Entries), names(second.Entries))
+	}
+}
+
+// --- Entry metadata ---
+
+func TestAFileEntryIsListed(t *testing.T) {
+	handler, root := newAPI(t)
+	path := writeContent(t, filepath.Join(root, "notes.txt"), "hello")
+	stamp := time.Unix(1758000000, 0)
+	setModTime(t, path, stamp)
+
+	body := decodeList(t, get(t, handler, listURL("")))
+
+	entry := findEntry(t, body.Entries, "notes.txt")
+	if entry.Size == nil {
+		t.Fatal("文件条目的 size 缺省，期望给出该文件自身的大小")
+	}
+	if want := int64(len("hello")); *entry.Size != want {
+		t.Errorf("size = %d，期望该文件自身的字节数 %d", *entry.Size, want)
+	}
+	if entry.ModifiedAt == nil {
+		t.Fatal("文件条目的 modified_at 缺省，期望给出最后修改时间")
+	}
+	if *entry.ModifiedAt != stamp.Unix() {
+		t.Errorf("modified_at = %d，期望 Unix 整秒 %d", *entry.ModifiedAt, stamp.Unix())
+	}
+}
+
+func TestADirectoryEntryIsListed(t *testing.T) {
+	handler, root := newAPI(t)
+	sub := mkdir(t, root, "docs")
+	writeFile(t, filepath.Join(sub, "readme.md"))
+	// 先写内容再定时间：新建条目会改写目录自身的修改时间。
+	stamp := time.Unix(1758000000, 0)
+	setModTime(t, sub, stamp)
+
+	recorder := get(t, handler, listURL(""))
+	body := decodeList(t, recorder)
+
+	entry := findEntry(t, body.Entries, "docs")
+	if entry.ModifiedAt == nil {
+		t.Fatal("目录条目的 modified_at 缺省，期望给出最后修改时间")
+	}
+	if *entry.ModifiedAt != stamp.Unix() {
+		t.Errorf("modified_at = %d，期望 Unix 整秒 %d", *entry.ModifiedAt, stamp.Unix())
+	}
+
+	// 目录没有「自身占用字节数」这个概念，因此不出现 size。断言字段集合而不是只看
+	// 结构体取值：后者无法区分「size 为 0」与「size 不存在」。
+	raw := rawEntries(t, recorder)
+	var fields []string
+	for _, candidate := range raw {
+		if candidate["name"] == "docs" {
+			fields = fieldNames(candidate)
+		}
+	}
+	if fields == nil {
+		t.Fatalf("原始响应里没有 docs 条目：%v", raw)
+	}
+	if want := []string{"modified_at", "name", "type"}; !slices.Equal(fields, want) {
+		t.Errorf("目录条目字段 = %v，期望恰为 %v（目录不应给出 size）", fields, want)
+	}
+}
+
+func TestAnEntryIsASymbolicLink(t *testing.T) {
+	handler, root := newAPI(t)
+	// 目标在根目录之外，且必须显著大于它的路径字符串，否则这条用例区分不出
+	// lstat 与 Stat：两者在「目标很小」时会偶然取到同一个值。
+	outside := mkdir(t, filepath.Dir(root), "linked-payload")
+	payload := strings.Repeat("x", 64*1024)
+	target := writeContent(t, filepath.Join(outside, "payload.bin"), payload)
+
+	link := filepath.Join(root, "link")
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("无法创建符号链接（Windows 上可能需要特权），跳过：%v", err)
+	}
+
+	body := decodeList(t, get(t, handler, listURL("")))
+
+	entry := findEntry(t, body.Entries, "link")
+	if entry.Size == nil {
+		t.Fatal("符号链接条目的 size 缺省，期望给出链接自身的长度")
+	}
+	if want := int64(len(target)); *entry.Size != want {
+		t.Errorf("size = %d，期望链接自身的长度 %d（等于目标文件大小 %d 说明取数用了 os.Stat 而非 DirEntry.Info）",
+			*entry.Size, want, len(payload))
+	}
+}
+
+func TestModificationTimeFallsWithinTheSameSecond(t *testing.T) {
+	handler, root := newAPI(t)
+	base := time.Unix(1758000000, 0)
+	early := writeContent(t, filepath.Join(root, "early.txt"), "a")
+	late := writeContent(t, filepath.Join(root, "late.txt"), "b")
+	// 同一秒内的两个不同亚秒时刻：向下取整到整秒后必须相同。
+	setModTime(t, early, base.Add(120*time.Millisecond))
+	setModTime(t, late, base.Add(880*time.Millisecond))
+
+	body := decodeList(t, get(t, handler, listURL("")))
+
+	earlyAt := findEntry(t, body.Entries, "early.txt").ModifiedAt
+	lateAt := findEntry(t, body.Entries, "late.txt").ModifiedAt
+	if earlyAt == nil || lateAt == nil {
+		t.Fatalf("modified_at 缺省：early = %v，late = %v", earlyAt, lateAt)
+	}
+	if *earlyAt != *lateAt {
+		t.Errorf("同一秒内的两个时刻给出不同取值：%d 与 %d", *earlyAt, *lateAt)
+	}
+	if *earlyAt != base.Unix() {
+		t.Errorf("modified_at = %d，期望向下取整到整秒的 %d", *earlyAt, base.Unix())
+	}
+}
+
+func TestModificationTimeDoesNotDependOnTheHostEnvironment(t *testing.T) {
+	handler, root := newAPI(t)
+	setModTime(t, writeContent(t, filepath.Join(root, "notes.txt"), "a"), time.Unix(1758000000, 0))
+	mkdir(t, root, "docs")
+	setModTime(t, filepath.Join(root, "docs"), time.Unix(1758000100, 0))
+
+	// 每个时区取一份「条目名 -> modified_at」，跨时区逐条目比对。
+	listed := make([]map[string]int64, 0, 2)
+	for _, zone := range []string{"Asia/Tokyo", "America/New_York"} {
+		t.Run(zone, func(t *testing.T) {
+			t.Setenv("TZ", zone)
+			body := decodeList(t, get(t, handler, listURL("")))
+			snapshot := make(map[string]int64, len(body.Entries))
+			for _, entry := range body.Entries {
+				if entry.ModifiedAt == nil {
+					t.Fatalf("%s 的 modified_at 缺省", entry.Name)
+				}
+				snapshot[entry.Name] = *entry.ModifiedAt
+			}
+			listed = append(listed, snapshot)
+		})
+	}
+
+	for name, value := range listed[0] {
+		if other, ok := listed[1][name]; !ok {
+			t.Errorf("第二个时区下没有条目 %s", name)
+		} else if other != value {
+			t.Errorf("%s 的 modified_at 在两个时区下不同：%d 与 %d（说明取值经过了时区或本地化格式化）", name, value, other)
+		}
+	}
+}
+
+func TestAnEntrysMetadataCannotBeObtained(t *testing.T) {
+	handler, root := newAPIWithBrowserInfo(t, func(entry fs.DirEntry) (fs.FileInfo, error) {
+		// 只让一个条目取数失败，其余照常取——否则「整列表都缺元信息」也会让用例通过。
+		if entry.Name() == "vanished.txt" {
+			return nil, errors.New("条目在 readdir 之后消失")
+		}
+		return entry.Info()
+	})
+	writeFile(t, filepath.Join(root, "readable.txt"))
+	writeFile(t, filepath.Join(root, "vanished.txt"))
+
+	recorder := get(t, handler, listURL(""))
+	body := decodeList(t, recorder)
+
+	// 请求成功、条目仍在列表中：列表的首要性质是健壮，丢弃条目等于对存在性说谎。
+	if got, want := names(body.Entries), []string{"readable.txt", "vanished.txt"}; !slices.Equal(got, want) {
+		t.Fatalf("entries = %v，期望 %v（条目不得被丢弃）", got, want)
+	}
+
+	vanished := findEntry(t, body.Entries, "vanished.txt")
+	if vanished.Size != nil {
+		t.Errorf("取数失败的条目仍给出了 size = %d，期望省略", *vanished.Size)
+	}
+	if vanished.ModifiedAt != nil {
+		t.Errorf("取数失败的条目仍给出了 modified_at = %d，期望省略", *vanished.ModifiedAt)
+	}
+
+	// 未失败的条目仍然带元信息，证明 seam 只影响了目标条目。
+	readable := findEntry(t, body.Entries, "readable.txt")
+	if readable.Size == nil || readable.ModifiedAt == nil {
+		t.Errorf("可取元信息的条目缺字段：size = %v，modified_at = %v", readable.Size, readable.ModifiedAt)
+	}
+
+	// 缺省而不是 null：失败条目的字段集合恰为 [name type]。
+	for _, candidate := range rawEntries(t, recorder) {
+		if candidate["name"] != "vanished.txt" {
+			continue
+		}
+		if got, want := fieldNames(candidate), []string{"name", "type"}; !slices.Equal(got, want) {
+			t.Errorf("取数失败条目的字段 = %v，期望恰为 %v（不得用 null 表达缺省）", got, want)
+		}
+	}
+}
+
+func TestRepeatedListingsReturnTheSameMetadata(t *testing.T) {
+	handler, root := newAPI(t)
+	setModTime(t, writeContent(t, filepath.Join(root, "notes.txt"), "a"), time.Unix(1758000000, 0))
+	setModTime(t, mkdir(t, root, "docs"), time.Unix(1758000100, 0))
+	writeFile(t, filepath.Join(root, "docs", "readme.md"))
+
+	first := decodeList(t, get(t, handler, listURL("")))
+	second := decodeList(t, get(t, handler, listURL("")))
+
+	if !slices.Equal(names(first.Entries), names(second.Entries)) {
+		t.Fatalf("两次请求的条目不一致：%v 与 %v", names(first.Entries), names(second.Entries))
+	}
+	for i := range first.Entries {
+		a, b := first.Entries[i], second.Entries[i]
+		if a.ModifiedAt == nil || b.ModifiedAt == nil {
+			t.Errorf("%s 的 modified_at 缺省：%v 与 %v", a.Name, a.ModifiedAt, b.ModifiedAt)
+		} else if *a.ModifiedAt != *b.ModifiedAt {
+			t.Errorf("%s 的两次 modified_at 不一致：%d 与 %d", a.Name, *a.ModifiedAt, *b.ModifiedAt)
+		}
+		// 目录条目本就没有 size（design D5），其余条目两次取值必须一致。
+		if a.Type == entryDirectory {
+			continue
+		}
+		if a.Size == nil || b.Size == nil {
+			t.Errorf("%s 的 size 缺省：%v 与 %v", a.Name, a.Size, b.Size)
+		} else if *a.Size != *b.Size {
+			t.Errorf("%s 的两次 size 不一致：%d 与 %d", a.Name, *a.Size, *b.Size)
+		}
 	}
 }
 

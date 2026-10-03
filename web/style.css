@@ -72,6 +72,24 @@ body {
   list-style: none;
 }
 
+/* 表头与条目行用同一套列宽，靠 grid 而不是靠空白对齐（design D8）。
+   名称列 minmax(0, 1fr) 而不是 1fr：后者的最小尺寸是内容宽度，
+   长文件名会把整个布局撑宽——overflow-wrap 只能换行，撑宽它管不了。 */
+.entries-header,
+.entry {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 5.5rem 10rem;
+  column-gap: 0.75rem;
+  align-items: baseline;
+}
+
+.entries-header {
+  padding: 0 0.5rem 0.25rem;
+  font-size: 0.75rem;
+  color: #6e6e73;
+  border-bottom: 1px solid #d8d8dc;
+}
+
 .entry {
   padding: 0.4rem 0.5rem;
   border-radius: 6px;
@@ -80,7 +98,29 @@ body {
   overflow-wrap: anywhere;
 }
 
-/* 目录条目可点击，有 hover 反馈。 */
+/* 名称列是三列里唯一需要换行的，minmax(0, …) 的 0 正是为它留的。 */
+.entry-name,
+.entry-link,
+.entry-head {
+  min-width: 0;
+}
+
+.entry-size,
+.entry-time {
+  font-size: 0.8rem;
+  color: #6e6e73;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 大小与时间都是数字，右对齐才好竖着扫。 */
+.entry-size,
+.entry-time {
+  text-align: right;
+}
+
+/* 目录条目可点击，有 hover 反馈。类名沿用 Change 02 的词汇：
+   entry-name 表达「这是名称列」，entry-link 表达「这一行可点」，
+   两个类分开，样式就不用靠标签名去猜哪个 span 是文件。 */
 .entry-link {
   display: block;
   color: #0b62d0;
@@ -92,7 +132,7 @@ body {
 }
 
 /* 文件条目不可进入：不呈现可点击外观，避免死胡同手感。 */
-.entry-name {
+.entry > span.entry-name {
   color: #3a3a3c;
   cursor: default;
 }
@@ -103,18 +143,43 @@ body {
   font-size: 0.9rem;
 }
 
+/* 窄视口下三列全部保留，只收窄固定宽度并调小字号——某一列在窄屏上直接消失，
+   等于让用户在没有提示的情况下少看到一整类元信息，那属于产品取舍而不是表现层细节。 */
+@media (max-width: 34rem) {
+  .browser {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+
+  .entries-header,
+  .entry {
+    grid-template-columns: minmax(0, 1fr) 4.25rem 8.25rem;
+    column-gap: 0.5rem;
+  }
+
+  .entry-size,
+  .entry-time,
+  .entries-header {
+    font-size: 0.7rem;
+  }
+}
+
 @media (prefers-color-scheme: dark) {
   body {
     background: #1c1c1e;
     color: #f5f5f7;
   }
 
-  .toolbar {
+  .toolbar,
+  .entries-header {
     border-bottom-color: #3a3a3c;
   }
 
   .location,
-  .empty {
+  .empty,
+  .entries-header,
+  .entry-size,
+  .entry-time {
     color: #98989d;
   }
 
@@ -136,7 +201,7 @@ body {
     background: #2c2c2e;
   }
 
-  .entry-name {
+  .entry > span.entry-name {
     color: #d1d1d6;
   }
 }

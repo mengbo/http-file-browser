@@ -27,12 +27,35 @@ var codeStatus = map[string]int{
 // browser 持有命令行指定的根目录，目录列表端点以它为唯一的越界判定基准。
 type browser struct {
 	root string
+	// entryInfo 是条目元信息的取数函数，默认 DirEntry.Info（lstat 语义，design D4）。
+	//
+	// 这是一个显式声明的注入 seam（design D9），不是顺手加的参数：DirEntry.Info
+	// 只在「条目在 readdir 之后消失」时失败，那条竞态无法确定性构造，用
+	// 「建一堆文件 + 后台删」去撞只会得到 flaky 测试——而 flaky 测试会训练团队忽略红色。
+	// 保留这个字段让 Entry metadata 的「元信息不可得」场景有确定性覆盖，
+	// 它防的是将来有人把取数错误顺手 continue 掉（丢弃条目）或让整个列表失败。
+	entryInfo func(fs.DirEntry) (fs.FileInfo, error)
+}
+
+// newBrowser 构造生产路径上的 browser，entryInfo 取 DirEntry.Info。
+func newBrowser(root string) *browser {
+	return &browser{
+		root: root,
+		entryInfo: func(entry fs.DirEntry) (fs.FileInfo, error) {
+			return entry.Info()
+		},
+	}
 }
 
 // NewAPIHandler 返回 /api/ 区域专用的 handler。root 是已校验的根目录绝对路径。
 // 该区域的所有响应（含错误）都是 JSON，不产生 HTML 错误页或纯文本响应。
 func NewAPIHandler(root string) http.Handler {
-	b := &browser{root: root}
+	return apiHandler(newBrowser(root))
+}
+
+// apiHandler 按给定 browser 装配路由。生产路径走 NewAPIHandler，
+// 包内测试可自建 browser 替换 entryInfo 后调用它（design D9 的 seam）。
+func apiHandler(b *browser) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/health", b.handleHealth)
 	mux.HandleFunc("/api/list", b.handleList)
