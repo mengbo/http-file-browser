@@ -154,6 +154,22 @@
     entriesHeaderEl.hidden = true;
   }
 
+  // D2 形状校验：高亮路径上交给 HTML 解析器的字符串，只能来自 highlight.js 的输出，
+  // 且写入前经此校验——所有标签必须是 <span>（开标签可带且仅可带 class 属性），
+  // 闭标签必须是裸 </span>。文本部分的 <、> 只能是已被转义的实体（&lt; 等），
+  // 校验后残留任何裸 <、> 即整段拒绝。拒绝的方向是回退素文本而非报错：
+  // 呈现永远安全失败（spec: Fallback 的精神）。
+  var SPAN_OPEN = /<span(?:\s+class="[^"]*")?>/g;
+  var SPAN_CLOSE = /<\/span>/g;
+
+  function safeHighlightHTML(html) {
+    var stripped = html.replace(SPAN_OPEN, "").replace(SPAN_CLOSE, "");
+    if (/[<>]/.test(stripped)) {
+      return null;
+    }
+    return html;
+  }
+
   function hidePreview() {
     previewEl.textContent = "";
     previewEl.hidden = true;
@@ -167,10 +183,43 @@
     hidePreview();
   }
 
-  // renderContent 渲染文件视图。内容经 textContent 写入，绝不拼接 innerHTML：
-  // Change 02 的条目名不变量在这里扩展到文件内容本身（design D11）。
-  // 顺带说明为什么内容走 JSON 通道就是安全的：内容从不交给 HTML 解析器，
-  // 因此一个以 HTML 注释或标签开头的 .html 文件不会变成存储型 XSS。
+  // D3 语言识别：名字优先、内容兜底的激进策略。这是「装饰」不是「门」——判错只是颜色不对，
+  // spec 的 Content preservation 与 Fallback 两个 Requirement 兜底，永不改变内容、不报错。
+  // 扩展名映射直接用 hljs 内建别名表（getLanguage），不另立白名单；无映射时跑 highlightAuto。
+  // 与 text-preview 的文本判定零耦合：不被判为文本的文件根本到不了这里，两道门各管各的。
+  // relevance 低于该阈值的 auto 结果（.txt、自然语言）视为未识别，回退素文本。
+  var AUTO_MIN_RELEVANCE = 5;
+
+  function extensionOf(path) {
+    var name = path.slice(path.lastIndexOf("/") + 1);
+    var dot = name.lastIndexOf(".");
+    // 点开头的文件（.gitignore）没有扩展名：最后一个点就是首字符。
+    return dot <= 0 ? "" : name.slice(dot + 1).toLowerCase();
+  }
+
+  // highlightHTMLFor 返回高亮 HTML，识别失败或低置信时返回 null（素文本回退由调用方处理）。
+  function highlightHTMLFor(path, content) {
+    var ext = extensionOf(path);
+    try {
+      var mapped = ext !== "" ? hljs.getLanguage(ext) : null;
+      // 「Plain text」命中视同无映射（design D3）：.txt 一律走 auto/回退，不做无谓高亮。
+      if (mapped && mapped.name !== "Plain text") {
+        // 名字命中即按映射语言，不跑 auto（design D3）。
+        return hljs.highlight(content, { language: ext, ignoreIllegals: true }).value;
+      }
+      var auto = hljs.highlightAuto(content);
+      return auto.relevance >= AUTO_MIN_RELEVANCE ? auto.value : null;
+    } catch (err) {
+      // 识别或高亮抛错同样安全失败：素文本呈现，不向用户报错（spec: Fallback）。
+      return null;
+    }
+  }
+
+  // renderContent 渲染文件视图。素文本路径维持 Change 05 起的 textContent 不变承诺；
+  // 高亮路径是 D2 对 D11 的显式收窄：交给 HTML 解析器的字符串只能来自 highlight.js 的
+  // 输出，且写入前经 safeHighlightHTML 形状校验，校验不过整段回退素文本。
+  // 两条路径殊途同归：#preview 的 textContent 永远等于文件内容——高亮只是着色，
+  // 不增删改任何字符（spec: Content preservation under highlighting）。
   function renderContent(content) {
     clearError();
     hideEntries();
@@ -178,7 +227,17 @@
     // 文件的上级就是它所在的目录；文件位于根目录时该入口指向根目录本身。
     parentLinkEl.setAttribute("href", urlFor(parentOf(content.path)));
     parentLinkEl.hidden = false;
-    previewEl.textContent = content.content;
+    // highlightHTMLFor 的 null（未识别/低置信/抛错）直接走素文本；
+    // 只有高亮输出本身才需要过 D2 形状校验。
+    var html = highlightHTMLFor(content.path, content.content);
+    if (html !== null && safeHighlightHTML(html) !== null) {
+      // hljs 类名接住 vendored 主题的着色。
+      previewEl.className = "preview hljs";
+      previewEl.innerHTML = html;
+    } else {
+      previewEl.className = "preview";
+      previewEl.textContent = content.content;
+    }
     previewEl.hidden = false;
   }
 

@@ -133,7 +133,10 @@ body {
 
 /* 文件视图的内容区。长行横向滚动而不换行：代码换行会读不出缩进关系；
    max-width: 100% 是关键——pre 的固有宽度是 max-content，不设上限时一行长代码
-   会把整个布局撑宽，320px 窄视口下 documentElement.scrollWidth 就不再等于 innerWidth。 */
+   会把整个布局撑宽，320px 窄视口下 documentElement.scrollWidth 就不再等于 innerWidth。
+   颜色固定为「纸面」：vendored github 主题（design D4）按白底 #24292e 深字交付，
+   高亮与素文本两条路径必须同底同色，颜色外观切换也不改变内容区——
+   否则高亮文件白底、素文本文件随外观变深底，同一视图里来回跳变。 */
 .preview {
   margin: 0.5rem 0 0;
   padding: 0.75rem;
@@ -142,6 +145,7 @@ body {
   border: 1px solid #d8d8dc;
   border-radius: 8px;
   background: #ffffff;
+  color: #24292e;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.85rem;
   line-height: 1.5;
@@ -211,10 +215,5 @@ body {
 
   .entry:has(.entry-link):hover {
     background: #2c2c2e;
-  }
-
-  .preview {
-    border-color: #3a3a3c;
-    background: #1c1c1e;
   }
 }

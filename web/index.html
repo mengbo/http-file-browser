@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>http-file-browser</title>
   <link rel="stylesheet" href="/style.css">
+  <!-- 语法高亮呈现资源由服务自身内嵌提供（/vendor/，spec: Self-contained presentation resources）。
+       github 浅色主题在 hljs 样式之前引入：token 着色是主题的事，页面布局是 style.css 的事。 -->
+  <link rel="stylesheet" href="/vendor/highlight.min.css">
 </head>
 <body>
   <main class="browser">
@@ -30,10 +33,13 @@
 
     <p id="empty" class="empty" hidden>此目录为空</p>
 
-    <!-- 文件视图：列表三列与空目录提示都让位给内容。内容经 textContent 写入，
-         这个元素永远不交给 HTML 解析器（design D11）。 -->
+    <!-- 文件视图：列表三列与空目录提示都让位给内容。素文本路径经 textContent 写入；
+         高亮路径按 syntax-highlighting design D2 收窄了 Change 02 的 D11 不变量——
+         交给 HTML 解析器的字符串只能来自 highlight.js 输出，且写入前经形状校验。 -->
     <pre id="preview" class="preview" hidden></pre>
   </main>
+  <!-- hljs 必须先于 app.js 就位：renderContent 直接引用全局 hljs。 -->
+  <script src="/vendor/highlight.min.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>
