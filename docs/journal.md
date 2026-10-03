@@ -100,3 +100,16 @@
   3. **sync 的 MODIFIED 合并退化成了「逐字节搬运 + 断言」**：单块整替场景下从主 spec 与 delta 各按 `### Requirement:` 标题切出块、替换后断言两份字节一致，比「智能合并」的手抄更可靠——合并的智能不必体现在每次都重新创作，体现在知道这次不需要。
   4. **稀疏大文件 fixture 有个反直觉点**：全零的稀疏文件嗅探结果是「奇偶混杂 NUL → 非文本」，根本走不到超限判定，「判定先于超限」根本没被测到。fixture 必须头 4096 字节是文本、再 `os.Truncate` 到 1 MiB+1。**测两条规则的先后时，两条规则对同一输入的结果必须不同且都合法。**
   5. **端到端冒烟没有现成的二进制文件可点**（仓库根目录全是文本），`.git/index` 顶上——既是真实二进制、又在根目录内。环境给不了 fixture 时先找系统里现成的，与 Change 04 观察 4「绕开环境的脾气」同一思路。
+
+### 06 add-syntax-highlighting
+
+- 日期：2026-10-03（归档目录 `openspec/changes/archive/2026-10-03-add-syntax-highlighting/`）
+- 现象一（AI 把 Spec 写成实现方案）：**未发生**。四条 Requirement 全部是可观察行为——「以该语言的语法高亮形式呈现」「得到的字符序列与该文件的内容一致」「以普通文本形式呈现」「返回成功响应，响应体为该资源内容」；语言识别的具体机制（getLanguage 别名表、`highlightAuto`、`AUTO_MIN_RELEVANCE = 5`）、形状校验的正则、vendored 文件命名与版本注释格式，全部留在 design D2/D3/D4 与代码注释。spec 里连「highlight.js」这个库名都没出现（只说「语法高亮支持的语言」）。
+- 现象二（需求变化被误做成 ADDED）：不适用（本 Change 全部 ADDED）。但 Change 02 design D11 立的安全不变量（「这个元素永远不交给 HTML 解析器」）被本 Change 有意识地收窄：不是偷偷绕开，而是 proposal/design/tasks 三处明写「D2 显式推翻 D11 的字面表述」，`index.html` 与 `app.js` 的注释同步改写——**收窄不变量的动作要和不变量当初立起来时一样正式**。既有 capability 零 delta 兑现：三个既有 spec 一行未动。
+- 现象三（Apply 偷偷扩大范围）：**四起小的，全部当场报告**：① server_test 的静态资源表补了 `/vendor/highlight.min.css` 条目（tasks 1.4 只点名 `.js`）——同一 spec Scenario 的完整覆盖，非新行为；② Plain text 别名命中视同无映射——design D3「`.txt` 一律走回退」的落实，不是新策略；③ 任务 2.2 验证措辞「无扩展名二进制文件」的落点修正为「无扩展名且语言无法识别的文本文件」——真二进制在 `text-preview` 判定即被拒，到不了高亮层，已在 tasks 走查注记写明；④ 「纸面固定」样式（深色外观下 preview 保持白底）——2.4 授权范围内的协调决策，依据读自上游主题 CSS。无功能被静默增删。
+- 其他观察：
+  1. **呈现层走查抓到了 API 层测试与校验函数单测都抓不到的 bug**：`safeHighlightHTML(null)` 的 TypeError（低置信回退把 null 送进形状校验）——校验函数 13 个构造用例全绿、`go test` 全绿，但管线把它接错位置，只有浏览器真实点开 `notes` 才暴露。ADR-0003 把呈现层 Scenario 分派给浏览器走查，本 Change 是该决策的第一次兑现：**分派表不是形式，每一行都要有人接**。
+  2. **测试工具的导航模型本身就是被测系统的一部分**：agent-browser 的 `open` 是整页导航（window 状态清零）、`parent-link` 无 preventDefault（原生跳转）、文件视图清空 `#entries`（先离开才能再进入）——「同一文件重复查看」的两次渲染天然跨文档，最后靠 localStorage 接住。断言设计前先摸清工具与被测系统的导航语义，否则比对的根本不是两次渲染。
+  3. **版本验证项自己也需要版本感知**：tasks 3.4 写「注释中的版本号与运行时 `hljs.version` 一致」，而 11.12.0 的属性名是 `hljs.versionString`（`hljs.version` 不存在）。跨版本的 API 断言先在运行时探一下属性名，别把文档记忆当契约。
+  4. **样式协调的判断依据是读上游产物，不是猜**：github 主题只有 `.hljs` 一条基础色规则、不设字号，所以「preview 固定白底 + 主题 token 着色」无冲突；删掉 style.css 深色媒体查询里的 `.preview` 覆盖是唯一需要的动作。vendored 文件升级时这一步要重做——主题若哪天带上 `font-size`，协调方式就得变。
+  5. **归档时确认 Purpose 仍然为真**（Change 03 观察 6 纪律的第三次执行）：`syntax-highlighting` 的 Purpose 写「不包含语言识别的具体方法」，实现用了别名表 + auto + 阈值而 spec 无一处提及，仍然成立。
