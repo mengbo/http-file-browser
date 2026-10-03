@@ -104,9 +104,11 @@ func TestFrontendStaticAssetsAreServedWithMatchingContentType(t *testing.T) {
 	for path, wantType := range map[string]string{
 		"/app.js":    "text/javascript",
 		"/style.css": "text/css",
-		// 语法高亮的呈现资源同样由内嵌静态资源提供（spec: Self-contained presentation resources）。
-		"/vendor/highlight.min.js":  "text/javascript",
-		"/vendor/highlight.min.css": "text/css",
+		// 语法高亮与 Markdown 渲染的呈现资源同样由内嵌静态资源提供
+		// （spec: Self-contained presentation resources，syntax-highlighting 与 markdown-preview 各一条）。
+		"/vendor/highlight.min.js":   "text/javascript",
+		"/vendor/highlight.min.css":  "text/css",
+		"/vendor/markdown-it.min.js": "text/javascript",
 	} {
 		t.Run(path, func(t *testing.T) {
 			recorder := httptest.NewRecorder()

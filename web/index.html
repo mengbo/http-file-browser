@@ -34,12 +34,13 @@
     <p id="empty" class="empty" hidden>此目录为空</p>
 
     <!-- 文件视图：列表三列与空目录提示都让位给内容。素文本路径经 textContent 写入；
-         高亮路径按 syntax-highlighting design D2 收窄了 Change 02 的 D11 不变量——
-         交给 HTML 解析器的字符串只能来自 highlight.js 输出，且写入前经形状校验。 -->
+         高亮路径与 Markdown 路径各有一条防线（app.js safeHighlightHTML 上方注释）：
+         前者靠 hljs 输出形状校验，后者靠 markdown-it html:false 配置性封闭。 -->
     <pre id="preview" class="preview" hidden></pre>
   </main>
-  <!-- hljs 必须先于 app.js 就位：renderContent 直接引用全局 hljs。 -->
+  <!-- hljs 与 markdown-it 必须先于 app.js 就位：renderContent 直接引用全局 hljs 与 markdownit。 -->
   <script src="/vendor/highlight.min.js"></script>
+  <script src="/vendor/markdown-it.min.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>
