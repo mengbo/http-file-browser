@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -34,12 +35,47 @@ func decodeContent(t *testing.T, recorder *httptest.ResponseRecorder) contentRes
 
 // --- Text file recognition ---
 
-// TestTextRecognition 脱离文件系统直接钉住判定规则，对应三条 Scenario：
+// TestLooksLikeText 脱离文件系统钉住内容嗅探的判据本身（design D2/D3/D4）：
+// binary data byte 区间、空字节奇偶对齐豁免、空输入按文本处理。
+// Requirement 的「起始部分」窗口与入口分流由 looksLikeText 之上的
+// startsLikeText / isTextFile 与 API 层用例覆盖，这里只钉判据的纯逻辑。
+func TestLooksLikeText(t *testing.T) {
+	cases := []struct {
+		name string
+		head []byte
+		want bool
+	}{
+		// 纯 ASCII，含制表与换行
+		{"纯 ASCII", []byte("all:\n\techo hi\n"), true},
+		// 0x09（制表）与 0x1B（ESC）都不在二进制数据字节区间内
+		{"含 0x09 与 0x1B", []byte{'\t', 0x1B, 'x'}, true},
+		// PNG 魔数里的 0x1A 落在 0x0E–0x1A，命中判据
+		{"PNG 魔数", []byte{0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A}, false},
+		// 无 BOM 的 UTF-16：空字节全部只落一个奇偶侧，按豁免处理
+		{"UTF-16LE 无 BOM", []byte{'h', 0x00, 'i', 0x00, '!'}, true},
+		{"UTF-16BE 无 BOM", []byte{0x00, 'h', 0x00, 'i', 0x00, '!'}, true},
+		// 空字节奇偶混杂：豁免不成立
+		{"奇偶混杂 NUL", []byte{'a', 0x00, 0x00, 'b'}, false},
+		// 空输入不含任何二进制数据字节
+		{"空输入", nil, true},
+	}
+
+	for _, c := range cases {
+		if got := looksLikeText(c.head); got != c.want {
+			t.Errorf("looksLikeText(%q) = %v，期望 %v（%s）", c.head, got, c.want, c.name)
+		}
+	}
+}
+
+// TestTextRecognition 脱离文件系统钉住按名字判定的那一支，对应三条 Scenario：
 // A file with a known text extension is requested / A file with a non-text extension is requested /
-// A file without an extension is requested。
+// A file with a non-text extension contains text content——带扩展名的文件不嗅探内容，
+// 名字就一锤定音，因此这里不需要真实的文件内容。
 //
-// 内容端点的用例断言的是「端点返回什么」，这里断言的是「清单与比较规则本身」——
-// 换一张文件系统上就能造出全部反例，而白名单被改动时下面那条集合断言会立刻失败。
+// 名称没有扩展名的文件由内容起始部分判定（Change 05 的分流，design D1），
+// 判据本身由 TestLooksLikeText 钉住，端到端行为由 API 层的各条 Scenario 用例覆盖。
+//
+// 白名单被改动时下面那条集合断言会立刻失败，而不是留下一条没人记得为什么变了的 Scenario。
 func TestTextRecognition(t *testing.T) {
 	cases := []struct {
 		name string
@@ -96,17 +132,14 @@ func TestTextRecognition(t *testing.T) {
 		{"main.jsx", true},
 		{"main.vue", true},
 		{"main.svelte", true},
+		// Go 工作区：go.mod / go.sum / go.work 是 proposal 点名的动机文件
+		{"go.mod", true},
+		{"go.sum", true},
+		{"go.work", true},
 		// 大小写不敏感：README.TXT 与 README.txt 同等对待
 		{"README.TXT", true},
 		{"Notes.Md", true},
 		{"SCRIPT.SH", true},
-		// 无扩展名的一切文件判为非文本——这正是 Change 05 要放宽的那一刀
-		{"Makefile", false},
-		{"LICENSE", false},
-		{".gitignore", false},
-		{".editorconfig", false},
-		// 名字就是一个点，或以点收尾：没有可用的扩展名
-		{"notes.", false},
 		// 图片、音视频、压缩包、字体、可执行文件
 		{"logo.png", false},
 		{"logo.jpg", false},
@@ -156,6 +189,165 @@ func TestTextRecognition(t *testing.T) {
 	if !slices.Equal(recognized, whitelist) {
 		t.Errorf("被判定为文本的扩展名 = %v，期望恰为白名单 %v（清单与用例必须一一对应）", recognized, whitelist)
 	}
+}
+
+// --- Text file recognition：内容分流的各条 Scenario（API 层） ---
+
+// TestAFileWithoutAnExtensionIsRequested 对应 Scenario
+// A file without an extension is requested：Makefile 式的文件按内容起始部分判定，
+// 不含二进制数据字节即提供内容——Change 04 那一刀在此放开。
+func TestAFileWithoutAnExtensionIsRequested(t *testing.T) {
+	handler, root := newAPI(t)
+	const content = "all:\n\t@echo hi\n"
+	writeContent(t, filepath.Join(root, "Makefile"), content)
+
+	body := decodeContent(t, get(t, handler, contentURL("Makefile")))
+
+	if body.Path != "Makefile" {
+		t.Errorf("path = %q，期望 %q", body.Path, "Makefile")
+	}
+	if body.Content != content {
+		t.Errorf("content = %q，期望该文件的完整内容 %q", body.Content, content)
+	}
+}
+
+// TestAFileWithANonTextExtensionContainsTextContent 对应 Scenario
+// A file with a non-text extension contains text content：扩展名不在白名单就
+// 不嗅探内容，装着纯文本也按非文本拒绝（文件名与内容不符的责任在文件系统，
+// Change 04 已接受的取舍，本 Change 不推翻）。
+func TestAFileWithANonTextExtensionContainsTextContent(t *testing.T) {
+	handler, root := newAPI(t)
+	writeContent(t, filepath.Join(root, "photo.png"), "其实全是纯文本")
+
+	expectFailure(t, get(t, handler, contentURL("photo.png")), codeNotText, http.StatusBadRequest)
+}
+
+// TestAFileWithoutAnExtensionContainsBinaryDataBytes 对应 Scenario
+// A file without an extension contains binary data bytes：起始部分命中
+// binary data byte 判据（PNG 魔数里的 0x1A）即拒绝。
+func TestAFileWithoutAnExtensionContainsBinaryDataBytes(t *testing.T) {
+	handler, root := newAPI(t)
+	name := filepath.Join(root, "image")
+	if err := os.WriteFile(name, []byte{0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A}, 0o644); err != nil {
+		t.Fatalf("准备文件 %s 失败：%v", name, err)
+	}
+
+	expectFailure(t, get(t, handler, contentURL("image")), codeNotText, http.StatusBadRequest)
+}
+
+// TestAFileWithoutAnExtensionAndWithoutAnyContentIsRequested 对应 Scenario
+// A file without an extension and without any content is requested：空内容不含
+// 任何二进制数据字节，判为文本（.gitkeep 这类占位文件因此可被请求）。
+func TestAFileWithoutAnExtensionAndWithoutAnyContentIsRequested(t *testing.T) {
+	handler, root := newAPI(t)
+	writeContent(t, filepath.Join(root, ".gitkeep"), "")
+
+	body := decodeContent(t, get(t, handler, contentURL(".gitkeep")))
+
+	if body.Path != ".gitkeep" {
+		t.Errorf("path = %q，期望 %q", body.Path, ".gitkeep")
+	}
+	if body.Content != "" {
+		t.Errorf("content = %q，期望空字符串而不是错误", body.Content)
+	}
+}
+
+// TestBinaryDataBytesAppearOnlyAfterTheStartOfTheContent 对应 Scenario
+// Binary data bytes appear only after the start of the content：判定只看起始
+// 窗口（sniffWindow），窗口之后出现的二进制数据字节不改变认定。
+func TestBinaryDataBytesAppearOnlyAfterTheStartOfTheContent(t *testing.T) {
+	handler, root := newAPI(t)
+	raw := append(bytes.Repeat([]byte("a"), sniffWindow), 0x01) // 二进制字节在窗口之外
+	name := filepath.Join(root, "notes")
+	if err := os.WriteFile(name, raw, 0o644); err != nil {
+		t.Fatalf("准备文件 %s 失败：%v", name, err)
+	}
+
+	body := decodeContent(t, get(t, handler, contentURL("notes")))
+
+	if body.Path != "notes" {
+		t.Errorf("path = %q，期望 %q", body.Path, "notes")
+	}
+	if body.Content != string(raw) {
+		t.Errorf("content 长度 = %d，期望窗口外内容原样保留（总长 %d）", len(body.Content), len(raw))
+	}
+}
+
+// TestAUTF16TextFileWithoutAByteOrderMarkIsRequested 对应 Scenario
+// A UTF-16 text file without a byte order mark is requested：空字节全部只落
+// 一个奇偶侧时按豁免处理，LE（奇数位）与 BE（偶数位）两个方向都覆盖。
+func TestAUTF16TextFileWithoutAByteOrderMarkIsRequested(t *testing.T) {
+	handler, root := newAPI(t)
+	le := []byte{'h', 0x00, 'i', 0x00, '\n', 0x00}
+	be := []byte{0x00, 'h', 0x00, 'i', 0x00, '\n'}
+	if err := os.WriteFile(filepath.Join(root, "le"), le, 0o644); err != nil {
+		t.Fatalf("准备 le 失败：%v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "be"), be, 0o644); err != nil {
+		t.Fatalf("准备 be 失败：%v", err)
+	}
+
+	for _, c := range []struct {
+		path string
+		raw  []byte
+	}{{"le", le}, {"be", be}} {
+		t.Run(c.path, func(t *testing.T) {
+			body := decodeContent(t, get(t, handler, contentURL(c.path)))
+
+			// 识别成功即可；内容按 UTF-8 呈现，空字节是合法 UTF-8，原样保留（design D9）。
+			if body.Content != string(c.raw) {
+				t.Errorf("content = %q，期望原样内容 %q", body.Content, string(c.raw))
+			}
+		})
+	}
+}
+
+// TestNULBytesAppearAtBothEvenAndOddPositions 对应 Scenario
+// NUL bytes appear at both even and odd positions：奇偶混杂的空字节没有豁免，
+// 即使除空字节外不含其他二进制数据字节也判为非文本。
+func TestNULBytesAppearAtBothEvenAndOddPositions(t *testing.T) {
+	handler, root := newAPI(t)
+	name := filepath.Join(root, "dbdump")
+	if err := os.WriteFile(name, []byte{'a', 0x00, 0x00, 'b'}, 0o644); err != nil {
+		t.Fatalf("准备文件 %s 失败：%v", name, err)
+	}
+
+	expectFailure(t, get(t, handler, contentURL("dbdump")), codeNotText, http.StatusBadRequest)
+}
+
+// TestDetectionComesBeforeOversizeAndStaysConsistent 钉住 design D5 的优先级与
+// Requirement 的一致性承诺：无扩展名文件的判定先于 too_large（起始部分是文本的
+// 稀疏大文件报 too_large 而不是 not_text），带非文本扩展名的超大文件仍报
+// not_text，同一文件的认定在重复请求间保持一致。
+func TestDetectionComesBeforeOversizeAndStaysConsistent(t *testing.T) {
+	handler, root := newAPI(t)
+
+	// 稀疏大文件：起始窗口是文本，其后的洞读回为空字节——若判定先于超限，
+	// 响应是 too_large；若实现把嗅探挪到超限之后，这里会拿到 not_text 而失败。
+	sparse := filepath.Join(root, "bigfile")
+	file, err := os.Create(sparse)
+	if err != nil {
+		t.Fatalf("准备文件 %s 失败：%v", sparse, err)
+	}
+	if _, err := file.WriteString(strings.Repeat("a", sniffWindow)); err != nil {
+		t.Fatalf("写入起始文本失败：%v", err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatalf("关闭文件失败：%v", err)
+	}
+	if err := os.Truncate(sparse, maxContentBytes+1); err != nil {
+		t.Fatalf("制造稀疏大文件失败：%v", err)
+	}
+
+	expectFailure(t, get(t, handler, contentURL("bigfile")), codeTooLarge, http.StatusBadRequest)
+	expectFailure(t, get(t, handler, contentURL("bigfile")), codeTooLarge, http.StatusBadRequest)
+
+	// 带非文本扩展名的超大文件：不打开文件、不嗅探，无论多大都报 not_text。
+	huge := filepath.Join(root, "huge.bin")
+	if err := os.WriteFile(huge, make([]byte, maxContentBytes+1), 0o644); err != nil {
+		t.Fatalf("准备文件 %s 失败：%v", huge, err)
+	}
+	expectFailure(t, get(t, handler, contentURL("huge.bin")), codeNotText, http.StatusBadRequest)
 }
 
 // --- Text file content response ---
