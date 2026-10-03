@@ -38,7 +38,7 @@
 
 | # | Change | 目标 | 备注 | 状态 |
 |---|--------|------|------|------|
-| 01 | `bootstrap-http-server` | 最小 HTTP 服务 | 建立项目骨架 | 💡 |
+| 01 | `bootstrap-http-server` | 最小 HTTP 服务 | 建立项目骨架；新增 capability `service-startup` | 🚧 |
 | 02 | `directory-browsing` | Finder 风格目录浏览 | 第一个核心 capability | 💡 |
 | 03 | `file-metadata` | 文件信息展示 | | 💡 |
 | 04 | `text-preview` | 文本文件查看 | | 💡 |
@@ -60,6 +60,10 @@
 产品能力边界（仅是地图，不预先创建，立 Change 时按需产生）：
 
 `directory-browsing` · `file-metadata` · `text-preview` · `syntax-highlighting` · `markdown-preview` · `image-preview` · `search` · `file-editing` · `remote-access` · `authentication`
+
+立 Change 时按需增补。已产生的：
+
+- `service-startup`（Change 01）：命令行启动契约 + HTTP 响应分区（静态页 vs `/api/` JSON、JSON 错误信封、默认仅监听回环）。不含目录浏览语义。
 
 ## MVP 明确不做
 
