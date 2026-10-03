@@ -120,9 +120,20 @@
 - 现象一（AI 把 Spec 写成实现方案）：**未发生**。五条 Requirement 全部是可观察行为——「以 Markdown 渲染形式呈现」「以字面形式呈现」「导航到解析出的目标位置」「在新的浏览器标签页中打开」「得到的字符序列与该代码块在文件中的内容一致」；markdown-it 与 `html: false`、`SCHEME_RE`、路径逐段解码与 `..` 弹栈、`AUTO_MIN_RELEVANCE` 阈值、fence 钩子返回 `<pre` 前缀串的机制，全部留在 design D1-D8 与代码注释。spec 里连「markdown-it」这个库名都没出现。
 - 现象二（需求变化被误做成 ADDED）：**第二次 MODIFIED 演练如约发生**。syntax-highlighting 的「Syntax highlighted presentation」被整体让渡——条件挂在「呈现形式」上（被 Markdown 渲染呈现的文件）而非文件种类上，为 Change 08 的渲染/源码切换留好了位；delta 带完整 Requirement 重写（正文 + 3 条 Scenario，两条旧 Scenario 原样保留）。sync 合并第二次退化成「单块整替 + 断言」（Change 05 观察 3 的做法直接复用），新增 capability 则是「Purpose 逐字搬运 + ADDED 落位」——合并的智能依旧体现在知道这次不需要智能。
 - 现象三（Apply 偷偷扩大范围）：**一起小的，已报告**。`index.html` 里 preview 元素的注释随 tasks 2.2 一并改写（tasks 只点名 `app.js`）——该注释复述的「字符串只能来自 hljs 输出」在双管线并行后已不完整，D7「避免注释撒谎」的动机对它同样成立，零行为变化。无功能被静默增删。
+ - 其他观察：
+   1. **D9 分派表的「注入异常」一行接住了一条真实防线缺口**：`markdownHTMLFor` 初版没有 try/catch——注释声称「抛错返回 null」，实现却让异常沿 promise 链落进「无法连接服务」的错误提示，正好违反「SHALL NOT 向用户报告错误」。API 层测试、`openspec validate`、正常路径走查都绿，只有按分派表构造故障输入才红。**「渲染未成功」这类罕见路径的可观察行为，靠等渲染器自己抛错是测不到的，注入故障是唯一的入射角。**
+   2. **第二次安全收窄的防线形状与第一次不同，成本也悬殊**：Change 06 的形状校验是「信任库输出、校验拦截」，写成 30 行正则；这次的配置性封闭（`html: false`）是一个构造参数——解析器根本不为 HTML 开门，无需输出校验。两条防线在注释里并列陈述、互不替代；「安全靠配置不靠组件」第一次落地，连 sanitizer 这个信任面都没引入。
+   3. **多标签断言要先确认 eval 落在哪个 tab**：外部链接点击后 agent-browser 的活动标签自动切到新标签，`eval` 随之落在 example.com 上，差点误判成「当前页变了」。实际行为正确（t1 原页未动、t2 新开）；工具的 tab 模型把 spec 里「新的浏览器标签页中打开，当前呈现保持不变」这句话显性化成了两个 tab 的状态比对，这比单页断言更贴近语义本义。
+   4. **init script 注入让故障成为可构造输入**：用 `defineProperty` setter 陷阱把 `markdownit` 全局替换为构造即抛错的函数，比寻找「病态输入」更可复现——渲染器对什么输入抛错是库的实现细节，故障注入不依赖它。
+   5. **归档时确认 Purpose 仍然为真**（Change 03 观察 6 纪律第四次执行）：`markdown-preview` 的 Purpose 写「不包含文件内容的修改与写回」「不包含渲染呈现之外的语法高亮呈现」，实现服务端零代码变化、代码块高亮挂在本 capability 之下，均成立。`syntax-highlighting` 的 Purpose「不包含 Markdown、图片等其他类型的渲染呈现」在让渡后反而更准了。
+
+### 08 improve-markdown-preview
+
+- 日期：2026-10-03（归档目录 `openspec/changes/archive/2026-10-03-improve-markdown-preview/`）
+- 现象一（AI 把 Spec 写成实现方案）：**未发生**。MODIFIED 正文只有可观察行为——「默认以渲染形式呈现」「SHALL NOT 保留此前的源码形式选择」；切换控件放哪、状态怎么存、重置点选在 `load()` 入口，全部留在 design D1/D3。spec 里连「按钮」这个词都没出现。
+- 现象二（需求变化被误做成 ADDED）：**第三次 MODIFIED 演练如约发生，且是 Change 07 预约的兑现时刻**。proposal 把本 Change 定位为「留位的兑现」：Change 07 把 syntax-highlighting 的豁免条件挂在「呈现形式」而非文件种类上，本次源码形式由 `syntax-highlighting` 零 delta 自然接管——那句措辞决策的回报在两个 Change 后到账。markdown-preview 的 MODIFIED 带完整 Requirement 重写，渲染相关 Scenario 的 WHEN 全部补上「以渲染形式呈现」条件。
+- 现象三（Apply 偷偷扩大范围）：**一起小的，已报告**。tasks 2.3 点名三处注释，实际改了四处——`isMarkdownPath` 上方「扩展名 md/markdown 即渲染」复述了分岔前的结论，按 D4 援引的 Change 07 现象三先例一并改写，零行为变化。无功能被静默增删。
 - 其他观察：
-  1. **D9 分派表的「注入异常」一行接住了一条真实防线缺口**：`markdownHTMLFor` 初版没有 try/catch——注释声称「抛错返回 null」，实现却让异常沿 promise 链落进「无法连接服务」的错误提示，正好违反「SHALL NOT 向用户报告错误」。API 层测试、`openspec validate`、正常路径走查都绿，只有按分派表构造故障输入才红。**「渲染未成功」这类罕见路径的可观察行为，靠等渲染器自己抛错是测不到的，注入故障是唯一的入射角。**
-  2. **第二次安全收窄的防线形状与第一次不同，成本也悬殊**：Change 06 的形状校验是「信任库输出、校验拦截」，写成 30 行正则；这次的配置性封闭（`html: false`）是一个构造参数——解析器根本不为 HTML 开门，无需输出校验。两条防线在注释里并列陈述、互不替代；「安全靠配置不靠组件」第一次落地，连 sanitizer 这个信任面都没引入。
-  3. **多标签断言要先确认 eval 落在哪个 tab**：外部链接点击后 agent-browser 的活动标签自动切到新标签，`eval` 随之落在 example.com 上，差点误判成「当前页变了」。实际行为正确（t1 原页未动、t2 新开）；工具的 tab 模型把 spec 里「新的浏览器标签页中打开，当前呈现保持不变」这句话显性化成了两个 tab 的状态比对，这比单页断言更贴近语义本义。
-  4. **init script 注入让故障成为可构造输入**：用 `defineProperty` setter 陷阱把 `markdownit` 全局替换为构造即抛错的函数，比寻找「病态输入」更可复现——渲染器对什么输入抛错是库的实现细节，故障注入不依赖它。
-  5. **归档时确认 Purpose 仍然为真**（Change 03 观察 6 纪律第四次执行）：`markdown-preview` 的 Purpose 写「不包含文件内容的修改与写回」「不包含渲染呈现之外的语法高亮呈现」，实现服务端零代码变化、代码块高亮挂在本 capability 之下，均成立。`syntax-highlighting` 的 Purpose「不包含 Markdown、图片等其他类型的渲染呈现」在让渡后反而更准了。
+  1. **工具的注入语义跨版本会变，故障注入前先验证注入真的到了主世界**。journal 07.4 的 `defineProperty` init-script 手法在本机当前版本的 agent-browser 上静默失效——init script 在隔离世界执行，主世界的 `getOwnPropertyDescriptor` 查到的是 vendor 自己的数据属性，渲染照常成功。加 `window.__trapRan` 探针才定位到根因，改用 `network route --body` 让 vendor 文件本身返回「构造即抛错」的 `markdownit` 全局——故障点相同，主世界确定生效。**「注入了」与「注入生效」是两个断言，后者才配当证据。**
+  2. **D1 的重置点选择在走查里兑现为一条强断言**：popstate 回到「曾切过源码的那条历史条目」仍以渲染形式呈现——呈现形式从未进 History，于是同文档内经 `load()` 的重置（D5 特意要求的 SPA 路径而非平凡的整页导航）与「历史条目不含呈现形式」在一条走查里同时被验证。把重置点选在唯一汇聚点，验证成本最低。
+  3. **sync 的 MODIFIED 合并第三次退化成「逐字节搬运 + 断言」**（延续 05 观察 3），但这次红的是断言自己——提取函数把 delta 侧的 `## ADDED Requirements` section 头算进了块尾，首跑误报 MISMATCH。**合并可以退化，断言不能想当然：断言失败时先审断言本身，再审被断言物。**
