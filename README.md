@@ -20,6 +20,8 @@
 
 ✅ Change 08 `improve-markdown-preview` 已归档：Markdown 文件的呈现形式可切换（「查看源码 / 查看渲染」按钮，默认渲染）——源码形式复用既有语法高亮管线呈现源码，切换只影响当前查看（离开后再次打开同一文件回到渲染形式，不写 URL/History、不可分享）；源码形式下内容字符序列与文件逐字符一致。渲染形式的既有行为（字面 HTML、相对链接导航、图片、代码块高亮、渲染失败回退素文本）全部挂上「以渲染形式呈现时」条件、行为不变。行为规范见 [openspec/specs/markdown-preview/](openspec/specs/markdown-preview/)。
 
+✅ Change 09 `add-image-preview` 已归档：图片文件（png/jpg/jpeg/gif/webp/bmp/ico/avif）点开即以图片呈现——服务端按扩展名识别图片、经 `/api/image` 以流式字节响应提供内容（无大小上限），由浏览器解码呈现；识别只看名字、不读内容也不验魔数，装着图片字节的无扩展名或非图片扩展名文件照样拒绝（`not_an_image`）。图片无法加载时文件视图给一句中性回退说明，不留静默破图、不误报为服务错误。`/api/` 分区为图片字节开唯一的口：该端点的错误响应仍一律 JSON 信封。SVG 刻意不做，记入想法池。行为规范见 [openspec/specs/image-preview/](openspec/specs/image-preview/) 与 [openspec/specs/service-startup/](openspec/specs/service-startup/)。
+
 - **判定规则是「扩展名白名单 + 无扩展名嗅探内容」**（Change 05 起）：带已知文本扩展名的文件按名字直接判定；名称没有扩展名的文件按内容起始窗口判定，窗口内的空字节若全部只落偶数位或只落奇数位（UTF-16 特征）则豁免。
 - 判定为非文本时给出「这是二进制文件，无法以文本预览」；超过 1 MiB 的文件给出「文件过大，无法以文本预览」（不静默截断）。路径是目录、越界、无权限等各有各的提示。
 - 内容一律按 UTF-8 呈现，无法解码的字节显示为替换字符。**不做编码检测**：GBK 等遗留中文编码会显示为乱码，这是自觉的取舍（不检测比检测错更诚实）。

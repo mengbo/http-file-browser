@@ -137,3 +137,15 @@
   1. **工具的注入语义跨版本会变，故障注入前先验证注入真的到了主世界**。journal 07.4 的 `defineProperty` init-script 手法在本机当前版本的 agent-browser 上静默失效——init script 在隔离世界执行，主世界的 `getOwnPropertyDescriptor` 查到的是 vendor 自己的数据属性，渲染照常成功。加 `window.__trapRan` 探针才定位到根因，改用 `network route --body` 让 vendor 文件本身返回「构造即抛错」的 `markdownit` 全局——故障点相同，主世界确定生效。**「注入了」与「注入生效」是两个断言，后者才配当证据。**
   2. **D1 的重置点选择在走查里兑现为一条强断言**：popstate 回到「曾切过源码的那条历史条目」仍以渲染形式呈现——呈现形式从未进 History，于是同文档内经 `load()` 的重置（D5 特意要求的 SPA 路径而非平凡的整页导航）与「历史条目不含呈现形式」在一条走查里同时被验证。把重置点选在唯一汇聚点，验证成本最低。
   3. **sync 的 MODIFIED 合并第三次退化成「逐字节搬运 + 断言」**（延续 05 观察 3），但这次红的是断言自己——提取函数把 delta 侧的 `## ADDED Requirements` section 头算进了块尾，首跑误报 MISMATCH。**合并可以退化，断言不能想当然：断言失败时先审断言本身，再审被断言物。**
+
+### 09 add-image-preview
+
+- 日期：2026-10-04（归档目录 `openspec/changes/archive/2026-10-04-add-image-preview/`）
+- 现象一（AI 把 Spec 写成实现方案）：**未发生**。五条 Requirement（4 ADDED + 1 MODIFIED）全部是可观察行为——「返回该文件内容的字节序列」「SHALL NOT 返回根目录之外的文件的图片内容」「成功响应 SHALL NOT 以 JSON 响应体返回」；端点命名 `/api/image`、八项白名单、`http.ServeContent` 流式拷贝、`dot > 0` 大小写折叠全部留在 design D1-D3 与代码注释，spec 里没有出现过任何实现机制。
+- 现象二（需求变化被误做成 ADDED）：**第四次 MODIFIED 演练，这次改的是别的 capability 里的一句既有承诺**。service-startup 的「HTTP surface partitioning」收窄——`/api/` 分区的 JSON 承诺在图片端点的成功响应上开口，MODIFIED 带完整 Requirement 重写（正文 + 4 条旧 Scenario 原样保留 + 新增 Image content endpoint succeeds）；`JSON error responses` 的 Scenario 端点无关，继续适用、零 delta。sync 第四次退化成「单块整替 + 新建 capability 的 Purpose 逐字搬运」（延续 05 观察 3、07 观察 2）。
+- 现象三（Apply 偷偷扩大范围）：**一起小的，已报告**。`content_test.go` 的 `TestEveryKnownErrorCodeIsMappedToAStatus` 增补了 `codeNotAnImage`（tasks 未点名这条测试）——新标识登记进 `codeStatus` 后，守门测试的清单若不同步就会名不副实；零行为变化，与 Change 07/08 的注释改写同类。无功能被静默增删。
+- 其他观察：
+  1. **承诺与观察手段对齐，走查的断言才立得住**：D5 刻意让 spec 只承诺「回退说明出现」而不区分失败原因——路径级错误（`not_found` 等）经 `<img>` 本来就全部塌缩成 onerror，观察不到的区分写进 spec 只会逼出走查时无法兑现的断言。与 Change 06 观察 1 相对：那次是走查抓到了测试没抓到的 bug，这次是分派表先问了「这个区分，浏览器走查能不能观察到」。
+  2. **「无上限」没有负测试可写**：spec 不设大小上限，测试无法证明「不存在的限制不存在」；D3 的实际保障是传输路径本身（流式拷贝、内存与文件大小无关），落在测试里的只有路径正确性断言（响应体逐字节等于文件内容）。设计决策承担的部分，别指望测试清单背书。
+  3. **前后端双清单的同步靠注释互引 + 双向无害论证**：零构建单二进制约束下没有共享配置的便宜方案，`IMAGE_EXTENSIONS`（app.js）与 `imageExtensions`（image.go）各自独立声明、注释互引提醒同步；漂移两个方向都无害的论证（design D4）让「不同步也不撒谎」成立——同步是本意，不是安全依赖。
+  4. **归档时确认 Purpose 仍然为真**（Change 03 观察 6 纪律第五次执行）：`image-preview` 的 Purpose 写「不包含文本型图像格式（如 SVG）的呈现」「不包含图片内容的修改与写回」——实现无 SVG 分支、端点 GET 只读，成立。`service-startup` 的 Purpose「静态页面与 JSON 接口如何划分」在图片字节开口后有一丝张力，但「划分」仍是该 capability 的主题、例外是划分的一部分，不改；如实记录备查。
