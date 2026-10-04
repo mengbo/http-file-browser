@@ -2,7 +2,7 @@
 
 零配置的 HTTP 文件浏览器：指定一个目录启动本地服务，在浏览器中像 macOS Finder 一样浏览文件系统。
 
-本项目同时是 OpenSpec SDD（Spec-Driven Development）工作流的学习实验项目：所有行为变化都经由 Explore → Propose → Apply → Verify → Archive 演进，`openspec/` 目录记录系统当前行为与完整演进史。
+本项目同时是 [OpenSpec](https://openspec.dev/) SDD（Spec-Driven Development）工作流的学习实验项目：所有行为变化都经由 Explore → Propose → Apply → Verify → Archive 演进，`openspec/` 目录记录系统当前行为与完整演进史。下文有 [OpenSpec 的安装与配置说明](#openspec)。
 
 ## 当前状态
 
@@ -64,6 +64,67 @@ go build -o http-file-browser .
 - 前端页面与静态资源内嵌在二进制中，产物可以单独拷走运行，不需要随附资源目录。
 - 文件条目可点开查看文本内容；不是文本的文件点进去会得到一句明确的提示，而不是一个点不动的死条目。内容通过 `?path=` 定位，因此「当前打开的文件」同样可以分享成深链接。
 - 浏览位置用相对根目录的路径表示（形如 `/?path=docs/api`），因此深链接可以跨机器复用：同一个 `?path=docs` 在以另一个根目录启动的服务上照样能打开。
+
+
+## OpenSpec
+
+本项目的行为变化全部经由 [OpenSpec](https://openspec.dev/)（[GitHub](https://github.com/Fission-AI/OpenSpec)）驱动的 SDD 流程管理。OpenSpec 是面向 AI 编码助手的轻量规格框架：先把「要做什么」写成规格（spec）并对齐，再动手写代码，让需求不再散落在聊天记录里。核心模型是三件套：
+
+- `openspec/specs/` —— 系统当前行为（现在是什么）
+- `openspec/changes/` —— 正在进行的变更（正在变什么）
+- `openspec/changes/archive/` —— 已完成的变更（怎么变成这样的）
+
+### 安装
+
+需要 Node.js 20.19.0 或更高版本（这是 OpenSpec 工具链的要求，与产品本身无关——产品只需 Go）。任选其一：
+
+```bash
+npm install -g @fission-ai/openspec@latest   # npm / pnpm / yarn / bun
+brew install openspec                         # macOS / Linux
+```
+
+安装后确认 CLI 可用：
+
+```bash
+openspec --version
+```
+
+### 在本项目初始化
+
+CLI 只装一次；每个项目在仓库根执行一次初始化，生成 `openspec/` 目录与当前 AI 工具的工作流文件（本项目用 OpenCode，落在 `.opencode/`）：
+
+```bash
+cd http-file-browser
+openspec init
+```
+
+`openspec init` 会询问使用哪些 AI 工具，并写出：
+
+- `openspec/config.yaml` —— 项目级背景与规则（本项目已配置为中文产出）
+- `openspec/specs/`、`openspec/changes/` —— 空的规格与变更目录
+- AI 工具目录下的 skills 与命令
+
+重复执行 `init` 是安全的：已配置的工具显示 `Refreshed`，新选的工具会被追加。
+
+### 配置扩展命令
+
+默认 `core` profile 只装 6 个工作流（`explore` / `propose` / `apply` / `update` / `sync` / `archive`）。另外 6 个是可选扩展：`new` / `continue` / `ff` / `verify` / `bulk-archive` / `onboard`——前三个把变更拆成一份份 artifact 逐个生成，`verify` 在归档前对账，`bulk-archive` 一次归档多个，`onboard` 用于教学。本项目开启了全部 12 个，因此在 `.opencode/commands/` 能看到全部 `/opsx-*` 命令。启用方式：
+
+```bash
+openspec config profile      # 交互式勾选工作流，也可选 delivery：skills / commands / both
+openspec update              # 把选择应用到当前项目，刷新生成的命令与技能文件
+```
+
+非交互式指定交付形态（skills 指 AI 自主选用，commands 指 `/opsx-*` 输入入口，默认 `both`）：
+
+```bash
+openspec config set delivery skills   # 或 both、commands
+openspec update
+```
+
+注意：`openspec config profile` 改的是本机全局设置，需要在每个项目里各跑一次 `openspec update` 才会落到该项目；升级 CLI 后同样如此。命令形态随工具而异，OpenCode 显示为 `/opsx-propose` 这种写法。
+
+本项目的命令速查、选路决策与常见反模式见 [docs/OpenSpec_Cheatsheet.md](docs/OpenSpec_Cheatsheet.md)。
 
 
 ## 文档
