@@ -26,11 +26,13 @@
 
 ✅ Change 10 `add-file-search` 已归档：在当前目录子树内按文件名递归搜索（子串 + 大小写折叠 + 空查询匹配一切），结果行显示名称、所在目录与类型，URL 镜像为 `/?path=<base>&q=<query>`（前进后退在列表与结果视图间切换、重开重现）。服务端瘦命中条目仅 `name`/`type`/`path`，不触碰目录列表「不携带内容」的门；越界判定复用物理路径基线，零新错误码。符号链接条目自身参与匹配但其子树不展开（lstat 语义），无权限子目录跳过其余命中照常。行为规范见 [openspec/specs/search/](openspec/specs/search/)。
 
+✅ Change 13 `add-remote-access` 已归档：服务默认仅监听回环（`127.0.0.1:8080`），不引入任何新行为；通过 `--listen <host:port>` 可显式监听非回环地址（典型如 `0.0.0.0:8080`），非回环启动时自动启用访问凭证——启动生成一次性随机 token（`crypto/rand` 32 字节 + `base64.RawURLEncoding`，进程内有效、重启即换、不落盘）并打印。凭证以 `access_token` Cookie 传递：HttpOnly + SameSite=Strict + Path=/，无 Secure / 无 Max-Age（纯 HTTP、会话级）。首次以 `/?token=<token>` 访问会种 Cookie 并 302 跳到去掉 token 的同一 URL，凭证不出现在浏览位置。未携带或无效凭证的请求被拒：`/api/` 区域返回 401 + JSON 信封 `{code:"unauthorized",…}`，其他路径返回自包含登录页（`web/login.html`）以 401 输出。前端在 API 调用得到 401 时跳回 `/`，由服务端给出登录入口。回环配置下完全不生成凭证、不要求认证、零回归。涉新增 capability `authentication` 与修改 `service-startup`，行为规范见 [openspec/specs/authentication/](openspec/specs/authentication/) 与 [openspec/specs/service-startup/](openspec/specs/service-startup/)。安全姿态同步以 ADR-0004 形式确立：默认只读、默认只听回环，扩大暴露面的能力（远程访问、写入）必须由用户显式开启。
+
 - **判定规则是「扩展名白名单 + 无扩展名嗅探内容」**（Change 05 起）：带已知文本扩展名的文件按名字直接判定；名称没有扩展名的文件按内容起始窗口判定，窗口内的空字节若全部只落偶数位或只落奇数位（UTF-16 特征）则豁免。
 - 判定为非文本时给出「这是二进制文件，无法以文本预览」；超过 1 MiB 的文件给出「文件过大，无法以文本预览」（不静默截断）。路径是目录、越界、无权限等各有各的提示。
 - 内容一律按 UTF-8 呈现，无法解码的字节显示为替换字符。**不做编码检测**：GBK 等遗留中文编码会显示为乱码，这是自觉的取舍（不检测比检测错更诚实）。
 
-尚未实现：文件编辑、远程访问。整体进度见 [docs/roadmap.md](docs/roadmap.md)。
+尚未实现：文件编辑。整体进度见 [docs/roadmap.md](docs/roadmap.md)。
 
 ## 快速开始
 

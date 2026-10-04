@@ -52,9 +52,7 @@
 | 10 | `add-file-search` | 文件搜索 | 文件名递归搜索（子串、大小写不敏感）；内容搜索切出到想法池 | ✅ [`2026-10-04-add-file-search`](changes/archive/2026-10-04-add-file-search/) |
 | 11 | `add-file-editing` | 文件编辑与保存 | 先 Explore 保存语义 | 💡 |
 | 12 | `add-edit-conflict-detection` | 编辑期间检测外部修改 | | 💡 |
-| 13 | `add-remote-access` | 监听地址 | 先 Explore；前置：17 | 💡 |
-| 14 | `add-token-authentication` | Token 认证 | | 💡 |
-| 15 | `improve-authentication` | 认证行为变化 | MODIFIED 演练 | 💡 |
+| 13 | `add-remote-access` | 远程访问 + Token 认证 | 合并原 13/14；原 15「认证行为变化」演练取消（MODIFIED 已由 05、08 练过）；Explore 已完成 | ✅ [`2026-10-04-add-remote-access`](changes/archive/2026-10-04-add-remote-access/) |
 | 16 | `polish-file-browser` | 最终体验优化 | | 💡 |
 
 ## Capability 地图
