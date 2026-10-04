@@ -157,13 +157,15 @@ func TestFailureCausesAreDistinguishableForImage(t *testing.T) {
 	}
 }
 
-// TestImageIsServedForAPathTraversingASymbolicLinkOutward 对应 Scenario
+// TestImageIsRejectedForAPathTraversingASymbolicLinkOutward 对应 Scenario
 // A path inside the root traverses a symbolic link outward。
 //
 // 用例名与 content_test.go / browse_test.go 里同 Scenario 的既有用例刻意不同：
 // 多条 Requirement 各自挂了措辞完全相同的 Scenario，差异放到测试名上区分
 // （沿用 Change 02 tasks 4.5 的做法）。
-func TestImageIsServedForAPathTraversingASymbolicLinkOutward(t *testing.T) {
+// 保留同一 fixture 钉住「物理出根必拒」：该行为自 improve-root-confinement 起由
+// spec 明确承诺，此前宽松承诺的翻案理由见该 Change proposal 的 Why。
+func TestImageIsRejectedForAPathTraversingASymbolicLinkOutward(t *testing.T) {
 	handler, root := newAPI(t)
 	outside := mkdir(t, filepath.Dir(root), "linked-payload")
 	target := writeImageContent(t, filepath.Join(outside, "secret.png"), pngMagic)
@@ -173,11 +175,13 @@ func TestImageIsServedForAPathTraversingASymbolicLinkOutward(t *testing.T) {
 		t.Skipf("无法创建符号链接（Windows 上可能需要特权），跳过：%v", err)
 	}
 
-	body := decodeImage(t, get(t, handler, imageURL("link.png")), "image/png")
+	recorder := get(t, handler, imageURL("link.png"))
 
-	// 判定链路不解析符号链接：字面位置在根目录内，因此按该路径提供内容，不视为越界。
-	if !bytes.Equal(body, pngMagic) {
-		t.Errorf("响应体与链接目标的内容不一致：got %d 字节，期望 %d 字节逐字节相同", len(body), len(pngMagic))
+	// 物理判定：字面位置在根目录内，但解析符号链接后落在物理根之外，按越界拒绝，
+	// 不返回该文件的图片内容。
+	expectFailure(t, recorder, codeOutsideRoot, http.StatusBadRequest)
+	if bytes.Contains(recorder.Body.Bytes(), pngMagic) {
+		t.Errorf("越界请求返回了根目录外图片的内容：%q", recorder.Body.String())
 	}
 }
 

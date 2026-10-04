@@ -120,9 +120,12 @@ func (b *browser) fillMetadata(entry *listEntry, item fs.DirEntry) {
 
 // resolve 把相对根目录的浏览位置解析为绝对路径与规范化后的相对路径。
 //
-// 全程按字面路径处理，不调用 filepath.EvalSymlinks（design D3）：两侧都不解析就没有
-// 「只解析一侧导致假越界」的不对称。代价是字面位置在根目录内、但经符号链接指向外部的
-// 路径也会被按内容提供——这是 spec 明确承认的边界，不是遗漏。
+// 越界判定分两层（improve-root-confinement design D2）。第一层是字面检查：绝对路径
+// 拒绝、Clean/Join、Rel 越界判定，继续拦截 `..` 与兄弟前缀这类字面逃逸。第二层是
+// 物理判定：对拼接出的绝对路径执行 EvalSymlinks，与启动时解析好的物理根做 Rel，
+// `..` 开头即越界——字面位置在根内、经符号链接指向外部的路径不再提供内容。两侧都
+// 解析（根与路径各一次）保证了判定基准一致：`/tmp` → `/private/tmp` 这类环境不会
+// 产生假越界。
 func (b *browser) resolve(rel string) (abs string, normalized string, apiErr *apiError) {
 	// 浏览位置的契约是「相对根目录的路径」，绝对路径不在契约内，直接按越界拒绝，
 	// 而不是被 Join 悄悄重解释成根目录下的同名子路径。
@@ -138,6 +141,24 @@ func (b *browser) resolve(rel string) (abs string, normalized string, apiErr *ap
 	if err != nil || fromRoot == ".." || strings.HasPrefix(fromRoot, ".."+string(filepath.Separator)) {
 		return "", "", fail(codeOutsideRoot, "路径超出根目录范围")
 	}
+
+	// 物理判定：请求路径解析其全部符号链接后，物理位置落在物理根之内才提供内容。
+	if physical, err := filepath.EvalSymlinks(abs); err == nil {
+		fromPhysical, relErr := filepath.Rel(b.physicalRoot, physical)
+		if relErr != nil || fromPhysical == ".." || strings.HasPrefix(fromPhysical, ".."+string(filepath.Separator)) {
+			return "", "", fail(codeOutsideRoot, "路径超出根目录范围")
+		}
+	}
+	// EvalSymlinks 失败（ENOENT / EACCES / ELOOP）时不做越界判定，放行到端点既有的
+	// Stat 分类：悬空软链得 not_found，无权限得 permission_denied，成环落入 classify
+	// 的 default 分支（improve-root-confinement design D3）。同一组件序列下 Stat 也必然
+	// 失败，解析不出来的路径一个字节都提供不出去，回落不重开洞，分类词汇不变。
+	//
+	// 已知限制（improve-root-confinement design D5）：本判定与端点后续的 Stat/Open 之间
+	// 存在 TOCTOU 窗口，本机进程在此窗口内替换符号链接可竞赢判定。本 Change 防御的
+	// 对象是远程网络请求，不是本机进程——后者本就能直接读文件系统，服务器不给它任何
+	// 增益。内核级封堵（Linux openat2 + RESOLVE_BENEATH）是 Linux-only，与 ADR-0001
+	// 的跨平台交叉编译价值冲突，不做。
 
 	normalized = ""
 	if fromRoot != "." {

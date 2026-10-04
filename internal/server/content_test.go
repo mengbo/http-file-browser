@@ -382,13 +382,15 @@ func TestAnEmptyTextFileIsRequested(t *testing.T) {
 	}
 }
 
-// TestContentIsServedForAPathTraversingASymbolicLinkOutward 对应 Scenario
+// TestContentIsRejectedForAPathTraversingASymbolicLinkOutward 对应 Scenario
 // A path inside the root traverses a symbolic link outward。
 //
-// 用例名与 browse_test.go 里那条同 Scenario 的列表用例刻意不同：两条 Requirement
+// 用例名与 browse_test.go 里那条同 Scenario 的用例刻意不同：两条 Requirement
 // 各自挂了一条措辞完全相同的 Scenario（Change 02 已有的那条讲列表），因此差异放到
 // 测试名上区分，不合并、不重名（沿用 Change 02 tasks 4.5 的做法）。
-func TestContentIsServedForAPathTraversingASymbolicLinkOutward(t *testing.T) {
+// 保留同一 fixture 钉住「物理出根必拒」：该行为自 improve-root-confinement 起由
+// spec 明确承诺，此前宽松承诺的翻案理由见该 Change proposal 的 Why。
+func TestContentIsRejectedForAPathTraversingASymbolicLinkOutward(t *testing.T) {
 	handler, root := newAPI(t)
 	outside := mkdir(t, filepath.Dir(root), "linked-payload")
 	target := writeContent(t, filepath.Join(outside, "secret.txt"), "根目录之外的内容")
@@ -398,14 +400,13 @@ func TestContentIsServedForAPathTraversingASymbolicLinkOutward(t *testing.T) {
 		t.Skipf("无法创建符号链接（Windows 上可能需要特权），跳过：%v", err)
 	}
 
-	body := decodeContent(t, get(t, handler, contentURL("link.txt")))
+	recorder := get(t, handler, contentURL("link.txt"))
 
-	// 判定链路不解析符号链接：字面位置在根目录内，因此按该路径提供内容，不视为越界。
-	if body.Path != "link.txt" {
-		t.Errorf("path = %q，期望 %q", body.Path, "link.txt")
-	}
-	if body.Content != "根目录之外的内容" {
-		t.Errorf("content = %q，期望按该字面路径提供目标文件的内容", body.Content)
+	// 物理判定：字面位置在根目录内，但解析符号链接后落在物理根之外，按越界拒绝，
+	// 不返回该文件的内容。
+	expectFailure(t, recorder, codeOutsideRoot, http.StatusBadRequest)
+	if strings.Contains(recorder.Body.String(), "根目录之外的内容") {
+		t.Errorf("越界请求返回了根目录外文件的内容：%q", recorder.Body.String())
 	}
 }
 

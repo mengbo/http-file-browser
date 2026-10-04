@@ -18,7 +18,11 @@ import (
 func newAPI(t *testing.T) (http.Handler, string) {
 	t.Helper()
 	root := t.TempDir()
-	return NewAPIHandler(root), root
+	handler, err := NewAPIHandler(root)
+	if err != nil {
+		t.Fatalf("以根目录 %s 构造服务失败：%v", root, err)
+	}
+	return handler, root
 }
 
 // newAPIWithBrowserInfo 走 design D9 的 seam：替换条目元信息的取数函数后再装配路由。
@@ -26,7 +30,10 @@ func newAPI(t *testing.T) (http.Handler, string) {
 func newAPIWithBrowserInfo(t *testing.T, entryInfo func(fs.DirEntry) (fs.FileInfo, error)) (http.Handler, string) {
 	t.Helper()
 	root := t.TempDir()
-	b := newBrowser(root)
+	b, err := newBrowser(root)
+	if err != nil {
+		t.Fatalf("以根目录 %s 构造 browser 失败：%v", root, err)
+	}
 	b.entryInfo = entryInfo
 	return apiHandler(b), root
 }
@@ -699,7 +706,11 @@ func TestASiblingDirectorySharesTheRootPathPrefix(t *testing.T) {
 	sibling := mkdir(t, base, "a", "bc")
 	writeFile(t, filepath.Join(sibling, "secret.txt"))
 
-	recorder := get(t, NewAPIHandler(root), listURL("../bc"))
+	handler, err := NewAPIHandler(root)
+	if err != nil {
+		t.Fatalf("以根目录 %s 构造服务失败：%v", root, err)
+	}
+	recorder := get(t, handler, listURL("../bc"))
 
 	expectFailure(t, recorder, codeOutsideRoot, http.StatusBadRequest)
 	if strings.Contains(recorder.Body.String(), "secret.txt") {
@@ -717,15 +728,102 @@ func TestAPathInsideTheRootTraversesASymbolicLinkOutward(t *testing.T) {
 		t.Skipf("无法创建符号链接（Windows 上可能需要特权），跳过：%v", err)
 	}
 
-	body := decodeList(t, get(t, handler, listURL("link")))
+	recorder := get(t, handler, listURL("link"))
 
-	// 判定链路不解析符号链接：字面位置在根目录内，因此按该路径提供内容，不视为越界。
-	if body.Path != "link" {
-		t.Errorf("path = %q，期望 %q", body.Path, "link")
+	// 物理判定：字面位置在根目录内，但解析符号链接后落在物理根之外，按越界拒绝，
+	// 不返回该路径的列表。
+	expectFailure(t, recorder, codeOutsideRoot, http.StatusBadRequest)
+	if strings.Contains(recorder.Body.String(), "visible.txt") {
+		t.Errorf("越界请求返回了根目录外的内容：%q", recorder.Body.String())
 	}
-	if got := names(body.Entries); !slices.Equal(got, []string{"visible.txt"}) {
-		t.Errorf("entries = %v，期望 [visible.txt]", got)
+}
+
+// TestAPathTraversesASymbolicLinkToAnotherLocationInsideTheRoot 对应 Scenario
+// A path traverses a symbolic link to another location inside the root。
+// 收紧不得过度阻塞：根内软链（目录内整理用链）继续可用。
+func TestAPathTraversesASymbolicLinkToAnotherLocationInsideTheRoot(t *testing.T) {
+	handler, root := newAPI(t)
+	mkdir(t, root, "real")
+	writeFile(t, filepath.Join(root, "real", "readme.md"))
+
+	link := filepath.Join(root, "alias")
+	if err := os.Symlink(filepath.Join(root, "real"), link); err != nil {
+		t.Skipf("无法创建符号链接（Windows 上可能需要特权），跳过：%v", err)
 	}
+
+	body := decodeList(t, get(t, handler, listURL("alias")))
+
+	// 解析后仍落在物理根之内：按该路径提供内容，不视为越界。
+	if body.Path != "alias" {
+		t.Errorf("path = %q，期望 %q", body.Path, "alias")
+	}
+	if got := names(body.Entries); !slices.Equal(got, []string{"readme.md"}) {
+		t.Errorf("entries = %v，期望 [readme.md]", got)
+	}
+}
+
+// TestTheRootPathItselfContainsASymbolicLink 对应 Scenario
+// The root path itself contains a symbolic link。
+// 用包住 t.TempDir 的软链作根，不依赖运行环境的路径巧合（design 风险条目：
+// macOS /var/folders 是真目录而 /tmp 是软链，两边都必须能通过）。
+func TestTheRootPathItselfContainsASymbolicLink(t *testing.T) {
+	root := t.TempDir()
+	mkdir(t, root, "docs")
+	writeFile(t, filepath.Join(root, "docs", "spec.md"))
+
+	wrapped := filepath.Join(t.TempDir(), "wrapped-root")
+	if err := os.Symlink(root, wrapped); err != nil {
+		t.Skipf("无法创建符号链接（Windows 上可能需要特权），跳过：%v", err)
+	}
+
+	handler, err := NewAPIHandler(wrapped)
+	if err != nil {
+		t.Fatalf("以软链路径 %s 作根构造服务失败：%v", wrapped, err)
+	}
+
+	// 根目录与其下子目录都正常：根与请求路径两侧都按物理位置解析，判定基准一致，
+	// 字面路径与物理位置不同不产生假越界。
+	rootBody := decodeList(t, get(t, handler, listURL("")))
+	if got := names(rootBody.Entries); !slices.Equal(got, []string{"docs"}) {
+		t.Errorf("entries = %v，期望 [docs]", got)
+	}
+	docsBody := decodeList(t, get(t, handler, listURL("docs")))
+	if got := names(docsBody.Entries); !slices.Equal(got, []string{"spec.md"}) {
+		t.Errorf("entries = %v，期望 [spec.md]", got)
+	}
+}
+
+// TestAMiddleSegmentTraversesASymbolicLinkOutward：越界不只发生在最后一段——
+// 路径中间段经软链出根时，终点无论字面上写成什么都一并拒绝。
+func TestAMiddleSegmentTraversesASymbolicLinkOutward(t *testing.T) {
+	handler, root := newAPI(t)
+	outside := mkdir(t, filepath.Dir(root), "linked-out")
+	writeFile(t, filepath.Join(outside, "secret.txt"))
+	mkdir(t, root, "a")
+
+	link := filepath.Join(root, "a", "jump")
+	if err := os.Symlink(outside, link); err != nil {
+		t.Skipf("无法创建符号链接（Windows 上可能需要特权），跳过：%v", err)
+	}
+
+	for _, input := range []string{"a/jump", "a/jump/secret.txt"} {
+		t.Run(input, func(t *testing.T) {
+			expectFailure(t, get(t, handler, listURL(input)), codeOutsideRoot, http.StatusBadRequest)
+		})
+	}
+}
+
+// TestADanglingSymbolicLinkIsNotFound：悬空软链维持既有 not_found 行为——
+// EvalSymlinks 失败时不做越界判定，回落到 Stat 分类（improve-root-confinement design D3）。
+func TestADanglingSymbolicLinkIsNotFound(t *testing.T) {
+	handler, root := newAPI(t)
+
+	link := filepath.Join(root, "dangling")
+	if err := os.Symlink(filepath.Join(root, "vanished"), link); err != nil {
+		t.Skipf("无法创建符号链接（Windows 上可能需要特权），跳过：%v", err)
+	}
+
+	expectFailure(t, get(t, handler, listURL("dangling")), codeNotFound, http.StatusNotFound)
 }
 
 // --- Directory access failures ---

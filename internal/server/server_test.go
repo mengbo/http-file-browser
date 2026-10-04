@@ -12,10 +12,14 @@ import (
 
 func TestServiceHealthIsQueried(t *testing.T) {
 	root := t.TempDir()
+	handler, err := NewAPIHandler(root)
+	if err != nil {
+		t.Fatalf("以根目录 %s 构造服务失败：%v", root, err)
+	}
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/api/health", nil)
 
-	NewAPIHandler(root).ServeHTTP(recorder, request)
+	handler.ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusOK {
 		t.Errorf("状态码 = %d，期望 %d", recorder.Code, http.StatusOK)
@@ -40,10 +44,15 @@ func TestServiceHealthIsQueried(t *testing.T) {
 }
 
 func TestUnknownAPIEndpointReturnsJSONError(t *testing.T) {
+	root := t.TempDir()
+	handler, err := NewAPIHandler(root)
+	if err != nil {
+		t.Fatalf("以根目录 %s 构造服务失败：%v", root, err)
+	}
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/api/nope", nil)
 
-	NewAPIHandler(t.TempDir()).ServeHTTP(recorder, request)
+	handler.ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusNotFound {
 		t.Errorf("状态码 = %d，期望 %d", recorder.Code, http.StatusNotFound)
@@ -65,7 +74,11 @@ func TestUnknownAPIEndpointReturnsJSONError(t *testing.T) {
 }
 
 func TestAPIPrefixTakesPrecedenceOverFileService(t *testing.T) {
-	handler := NewHandler(t.TempDir(), web.FS)
+	root := t.TempDir()
+	handler, err := NewHandler(root, web.FS)
+	if err != nil {
+		t.Fatalf("以根目录 %s 构造服务失败：%v", root, err)
+	}
 
 	for _, path := range []string{"/api/nope", "/api/", "/api/unknown/deep"} {
 		t.Run(path, func(t *testing.T) {
@@ -83,9 +96,14 @@ func TestAPIPrefixTakesPrecedenceOverFileService(t *testing.T) {
 }
 
 func TestRootPathReturnsFrontendPage(t *testing.T) {
+	root := t.TempDir()
+	handler, err := NewHandler(root, web.FS)
+	if err != nil {
+		t.Fatalf("以根目录 %s 构造服务失败：%v", root, err)
+	}
 	recorder := httptest.NewRecorder()
 
-	NewHandler(t.TempDir(), web.FS).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/", nil))
+	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/", nil))
 
 	if recorder.Code != http.StatusOK {
 		t.Errorf("状态码 = %d，期望 %d", recorder.Code, http.StatusOK)
@@ -99,7 +117,11 @@ func TestRootPathReturnsFrontendPage(t *testing.T) {
 }
 
 func TestFrontendStaticAssetsAreServedWithMatchingContentType(t *testing.T) {
-	handler := NewHandler(t.TempDir(), web.FS)
+	root := t.TempDir()
+	handler, err := NewHandler(root, web.FS)
+	if err != nil {
+		t.Fatalf("以根目录 %s 构造服务失败：%v", root, err)
+	}
 
 	for path, wantType := range map[string]string{
 		"/app.js":    "text/javascript",

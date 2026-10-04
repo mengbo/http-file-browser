@@ -2,8 +2,10 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/fs"
 	"net/http"
+	"path/filepath"
 )
 
 // 机器可读的错误标识（design D6）。
@@ -51,6 +53,10 @@ var codeStatus = map[string]int{
 // browser 持有命令行指定的根目录，目录列表端点以它为唯一的越界判定基准。
 type browser struct {
 	root string
+	// physicalRoot 是根目录解析全部符号链接后的物理位置（improve-root-confinement
+	// design D2）：启动时解析一次，此后每个请求不再重复解析根，越界的物理判定以它
+	// 为基准。构造失败（根不可解析）则无边界可言，服务不得启动。
+	physicalRoot string
 	// entryInfo 是条目元信息的取数函数，默认 DirEntry.Info（lstat 语义，design D4）。
 	//
 	// 这是一个显式声明的注入 seam（design D9），不是顺手加的参数：DirEntry.Info
@@ -62,19 +68,31 @@ type browser struct {
 }
 
 // newBrowser 构造生产路径上的 browser，entryInfo 取 DirEntry.Info。
-func newBrowser(root string) *browser {
+// 根目录的物理位置在此解析一次（improve-root-confinement design D2）；根不可解析时
+// 返回错误，由启动路径报错退出——根没有物理边界，越界判定就无从谈起。
+func newBrowser(root string) (*browser, error) {
+	physicalRoot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return nil, fmt.Errorf("根目录 %q 无法解析物理位置：%w", root, err)
+	}
 	return &browser{
-		root: root,
+		root:         root,
+		physicalRoot: physicalRoot,
 		entryInfo: func(entry fs.DirEntry) (fs.FileInfo, error) {
 			return entry.Info()
 		},
-	}
+	}, nil
 }
 
 // NewAPIHandler 返回 /api/ 区域专用的 handler。root 是已校验的根目录绝对路径。
 // 该区域的所有响应（含错误）都是 JSON，不产生 HTML 错误页或纯文本响应。
-func NewAPIHandler(root string) http.Handler {
-	return apiHandler(newBrowser(root))
+// 根目录无法解析物理位置时返回错误，调用方应以启动错误处理，不得用 nil handler 继续服务。
+func NewAPIHandler(root string) (http.Handler, error) {
+	b, err := newBrowser(root)
+	if err != nil {
+		return nil, err
+	}
+	return apiHandler(b), nil
 }
 
 // apiHandler 按给定 browser 装配路由。生产路径走 NewAPIHandler，
@@ -108,11 +126,16 @@ func (b *browser) handleAPINotFound(w http.ResponseWriter, r *http.Request) {
 
 // NewHandler 返回根 handler：/api/ 前缀交给 API 分区，其余路径交给内嵌前端静态资源。
 // 两支各自独立构造，根 mux 按路径前缀分派，因此 /api/ 下的请求不会落到文件服务上。
-func NewHandler(root string, assets fs.FS) http.Handler {
+// 根目录无法解析物理位置时返回错误，由启动路径报错退出。
+func NewHandler(root string, assets fs.FS) (http.Handler, error) {
+	api, err := NewAPIHandler(root)
+	if err != nil {
+		return nil, err
+	}
 	mux := http.NewServeMux()
-	mux.Handle("/api/", NewAPIHandler(root))
+	mux.Handle("/api/", api)
 	mux.Handle("/", http.FileServer(http.FS(assets)))
-	return mux
+	return mux, nil
 }
 
 type errorResponse struct {

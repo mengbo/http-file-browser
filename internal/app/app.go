@@ -31,6 +31,15 @@ func run(args []string, stdout, stderr io.Writer, assets fs.FS, listen listenFun
 		return err
 	}
 
+	// 根目录的物理位置在启动时解析一次（improve-root-confinement design D2）。
+	// 解析失败说明根本身不可达，没有边界可言：报告启动错误退出，而不是带着
+	// 未知的边界开始服务。
+	handler, err := server.NewHandler(root, assets)
+	if err != nil {
+		fmt.Fprintf(stderr, "错误：%v\n", err)
+		return err
+	}
+
 	listener, err := listen("tcp", listenAddress)
 	if err != nil {
 		err = fmt.Errorf("监听地址 %s 不可用：%w", listenAddress, err)
@@ -41,11 +50,7 @@ func run(args []string, stdout, stderr io.Writer, assets fs.FS, listen listenFun
 
 	fmt.Fprintf(stdout, "服务已就绪，访问 http://%s 浏览 %s\n", listener.Addr(), root)
 
-	return serve(listener, root, assets)
-}
-
-func serve(listener net.Listener, root string, assets fs.FS) error {
-	return http.Serve(listener, server.NewHandler(root, assets))
+	return http.Serve(listener, handler)
 }
 
 func rootDir(args []string) (string, error) {
