@@ -36,6 +36,11 @@ const (
 	codeNotAnImage = "not_an_image"
 )
 
+// codeUnauthorized 是认证失败独有的失败原因（add-remote-access design D5）：
+// 请求未携带或携带了无效的访问凭证。它与其余失败原因并列，使前端能按机器可读
+// 标识把它与「内容看不了」区分开（authentication: Authentication failure reporting）。
+const codeUnauthorized = "unauthorized"
+
 // codeStatus 把错误标识映射到 HTTP 状态码。
 // outside_root 用 400 而非 403：越界是请求路径本身不合法，不是身份受限。
 // 其余 400 的各条描述的都是「这个请求的目标给不出所请求的呈现」，不是身份问题。
@@ -48,6 +53,7 @@ var codeStatus = map[string]int{
 	codeTooLarge:         http.StatusBadRequest,
 	codeNotARegularFile:  http.StatusBadRequest,
 	codeNotAnImage:       http.StatusBadRequest,
+	codeUnauthorized:     http.StatusUnauthorized,
 }
 
 // browser 持有命令行指定的根目录，目录列表端点以它为唯一的越界判定基准。
@@ -129,7 +135,11 @@ func (b *browser) handleAPINotFound(w http.ResponseWriter, r *http.Request) {
 // NewHandler 返回根 handler：/api/ 前缀交给 API 分区，其余路径交给内嵌前端静态资源。
 // 两支各自独立构造，根 mux 按路径前缀分派，因此 /api/ 下的请求不会落到文件服务上。
 // 根目录无法解析物理位置时返回错误，由启动路径报错退出。
-func NewHandler(root string, assets fs.FS) (http.Handler, error) {
+//
+// auth 启用时，认证门包在根 mux 外层：所有请求先过门再进现有 mux，端点内部零改动
+// （add-remote-access design D5）。启用认证要求 assets 提供自包含登录页 login.html；
+// 未启用（回环）时不做认证、不读取登录页。
+func NewHandler(root string, assets fs.FS, auth Auth) (http.Handler, error) {
 	api, err := NewAPIHandler(root)
 	if err != nil {
 		return nil, err
@@ -137,7 +147,15 @@ func NewHandler(root string, assets fs.FS) (http.Handler, error) {
 	mux := http.NewServeMux()
 	mux.Handle("/api/", api)
 	mux.Handle("/", http.FileServer(http.FS(assets)))
-	return mux, nil
+
+	if !auth.enabled() {
+		return mux, nil
+	}
+	loginPage, err := fs.ReadFile(assets, "login.html")
+	if err != nil {
+		return nil, fmt.Errorf("读取登录页失败：%w", err)
+	}
+	return authMiddleware(auth, loginPage, mux), nil
 }
 
 type errorResponse struct {

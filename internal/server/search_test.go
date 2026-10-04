@@ -103,11 +103,11 @@ func TestMatchesAreArrangedInTreeOrder(t *testing.T) {
 	body := decodeSearch(t, get(t, handler, searchURL("", "report")))
 
 	want := []string{
-		"reports",                // 基准位置自身的命中：目录条目先于文件条目
-		"daily-report.md",        // 文件组内按大小写折叠后的名称排序
+		"reports",         // 基准位置自身的命中：目录条目先于文件条目
+		"daily-report.md", // 文件组内按大小写折叠后的名称排序
 		"report-a.txt",
 		"Report-z.txt",
-		"Other/report-draft.md",  // 子树按目录顺序展开：Other 在 reports 之前，命中连续排列
+		"Other/report-draft.md", // 子树按目录顺序展开：Other 在 reports 之前，命中连续排列
 		"Other/report-notes.txt",
 		"reports/2024-report.txt",
 	}

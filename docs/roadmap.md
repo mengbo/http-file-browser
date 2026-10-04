@@ -24,6 +24,7 @@
 |---|------|------|
 | [0001](adr/0001-go-single-binary.md) | 技术栈选 Go，单二进制交付 | accepted |
 | [0002](adr/0002-frontend-json-api-embedded-static.md) | 前后端分离：JSON API + 内嵌零构建静态前端 | accepted |
+| [0004](adr/0004-default-read-only-explicit-opt-in.md) | 默认只读；开放远程访问与写入均须显式开启 | accepted |
 
 ## 阶段规划
 
@@ -93,3 +94,4 @@
 - **遗留中文编码按 UTF-8 处理，中文文件会乱码**（Change 04 / design D9 的自觉取舍）：WHATWG 的编码机制结构性地只会给出 `utf-8` / `utf-16be` / `utf-16le` / `windows-1252`，**永远不返回 GBK / Shift_JIS / Big5**；真正的 CJK 检测是统计性的（uchardet、ICU），没有零依赖的 Go 等价物。理由是「不检测比检测错更诚实」——一个自信宣称「这是 GBK」却猜错的实现比明摆着的乱码更难排查。等真有用户抱怨时立独立 Change。
 - **`text-preview` 的 Purpose 写着「不包含文件类型识别能力」，Change 05 归档后这半句会变假**（与 Change 03 当年 `directory-browsing` 的 Purpose 完全同形）：archive 只合并 Requirement、不重写 Purpose。按 Change 03 的 journal 观察 6 的既定做法，届时把冲突摆出来、由用户授权改那一句并记进 journal；**不预先代改**——那条规则的纪律是「破例要重新问，不能因为上次破过就顺手破」。
 - **（上条已闭环）**：Change 05 归档时把冲突摆出、经用户授权改了那半句（「不包含文件类型识别能力」→「不包含文本判定之外的文件类型识别，不包含内容的编码检测与解码」），并记入 journal 观察——与 Change 03 观察 6 同一纪律，授权范围一句话为限。
+- **Host 头校验（防 DNS rebinding）**（`add-remote-access` 探索切出的边界物，2026-10-04）：服务端从不校验 `Host` 头。默认回环且无 token 的模式下，恶意网页可把自身域名重新解析到 `127.0.0.1`，再以「同源」身份请求本机服务、读走目录内容——当前没有任何防御。标准堵法是只接受白名单内的 `Host`（`localhost` / `127.0.0.1` / `[::1]` / 显式监听的地址）。`add-remote-access` 未纳入：属只读场景的历史遗留，且远程模式下 token 已挡住读取，故暂记此处，待独立 Change 处理。

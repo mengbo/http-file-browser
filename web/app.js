@@ -25,7 +25,8 @@
     outside_root: "该位置超出浏览范围",
     not_text: "这是二进制文件，无法以文本预览",
     too_large: "文件过大，无法以文本预览",
-    not_an_image: "该文件不是可识别的图片文件"
+    not_an_image: "该文件不是可识别的图片文件",
+    unauthorized: "需要访问凭证，正在返回登录入口…"
   };
 
   var root = "";
@@ -630,8 +631,15 @@
       });
   }
 
+  // fetchJSON 统一发起 JSON 接口请求。认证失效（401）时跳回入口，由服务端给出登录页
+  // （add-remote-access design D7）：服务重启换发新凭证后，浏览器仍带着旧 Cookie，
+  // 用户因此回到登录入口重新输入，而不是把 401 当作普通内容错误展示、卡在空视图。
   function fetchJSON(url) {
     return fetch(url, { headers: { Accept: "application/json" } }).then(function (response) {
+      if (response.status === 401) {
+        window.location.href = "/";
+        return { ok: false, body: null };
+      }
       return response.json().then(function (body) {
         return { ok: response.ok, body: body };
       });

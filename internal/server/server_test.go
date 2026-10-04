@@ -75,7 +75,7 @@ func TestUnknownAPIEndpointReturnsJSONError(t *testing.T) {
 
 func TestAPIPrefixTakesPrecedenceOverFileService(t *testing.T) {
 	root := t.TempDir()
-	handler, err := NewHandler(root, web.FS)
+	handler, err := NewHandler(root, web.FS, Auth{})
 	if err != nil {
 		t.Fatalf("以根目录 %s 构造服务失败：%v", root, err)
 	}
@@ -97,7 +97,7 @@ func TestAPIPrefixTakesPrecedenceOverFileService(t *testing.T) {
 
 func TestRootPathReturnsFrontendPage(t *testing.T) {
 	root := t.TempDir()
-	handler, err := NewHandler(root, web.FS)
+	handler, err := NewHandler(root, web.FS, Auth{})
 	if err != nil {
 		t.Fatalf("以根目录 %s 构造服务失败：%v", root, err)
 	}
@@ -118,7 +118,7 @@ func TestRootPathReturnsFrontendPage(t *testing.T) {
 
 func TestFrontendStaticAssetsAreServedWithMatchingContentType(t *testing.T) {
 	root := t.TempDir()
-	handler, err := NewHandler(root, web.FS)
+	handler, err := NewHandler(root, web.FS, Auth{})
 	if err != nil {
 		t.Fatalf("以根目录 %s 构造服务失败：%v", root, err)
 	}
