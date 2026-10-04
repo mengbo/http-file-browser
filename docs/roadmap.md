@@ -55,6 +55,7 @@
 | 13 | `add-remote-access` | 远程访问 + Token 认证 | 合并原 13/14；原 15「认证行为变化」演练取消（MODIFIED 已由 05、08 练过）；Explore 已完成 | ✅ [`2026-10-04-add-remote-access`](changes/archive/2026-10-04-add-remote-access/) |
 | 16 | `polish-file-browser` | 最终体验优化 | 视觉精修 + 类型化视觉图标；spec 进 `directory-browsing` ADDED，CSS 调优属 design 不入 spec | ✅ [`2026-10-04-polish-file-browser`](changes/archive/2026-10-04-polish-file-browser/) |
 | 18 | `add-directory-tree` | GitHub 代码视图：左侧持久目录树 | 两栏布局 + 懒加载目录树；零后端改动，携带 `directory-browsing` ADDED `目录树导航`；顺带修 Change 16 图标着色缺陷 | ✅ [`2026-10-04-add-directory-tree`](changes/archive/2026-10-04-add-directory-tree/) |
+| 19 | `improve-modified-time-display` | 目录列表修改时间固定格式 | 固定为 `YYYY-MM-DD HH:mm:ss`（本地时区），不再随 locale；推翻 add-file-metadata 的「时间显示随 locale」呈现决定，携带 `directory-browsing` ADDED `修改时间呈现格式`；纯呈现层，按 ADR-0003 浏览器走查 | ✅ [`2026-10-04-improve-modified-time-display`](changes/archive/2026-10-04-improve-modified-time-display/) |
 
 ## Capability 地图
 
@@ -72,6 +73,7 @@
 - `text-preview`（Change 04）：从目录列表进入文本文件并查看其内容——内容响应形状、查看位置的表示与重现、读取失败的机器可读错误标识。**判定只用扩展名白名单**（明知不完整），内容嗅探属于 Change 05。`directory-browsing` 零 delta——那道门没有被推翻，内容走独立端点。
 - `text-preview` 判定放宽（Change 05）：第一次 MODIFIED 演练。判定改为两级——扩展名在白名单内照旧按名字判定；**名称没有扩展名的文件按内容起始 4096 字节判定**（WHATWG binary data byte 判据 + 空字节奇偶对齐豁免，救回无 BOM 的 UTF-16）。白名单顺带补充 `mod`/`sum`/`work`。带扩展名但不在白名单的文件**不嗅探内容**，`logo.png` 装纯文本仍拒绝（Change 04 已接受的取舍不推翻）。`directory-browsing`、`service-startup` 零 delta。
 - `search`（Change 10）：在基准位置子树内按文件名递归定位条目——`/api/search` 端点与 `path`/`q` 参数缺省约定、名称匹配语义（子串 + 大小写折叠 + 空查询匹配一切）、命中条目瘦形状（`name`/`type`/`path`，相对根目录完整路径）、结果顺序（树序 + 与列表一致 + 重复可复现）、越界判定复用 `resolve` 的字面+物理两层 + `classify` 错误词汇（零新错误码）、遍历边界（符号链接不跟进、悬空软链可命中不失败、无权限子目录跳过其余照常）、前端搜索视图与 URL 重现（`/?path=<base>&q=<query>`、前进后退在列表与结果视图间切换）。现有六个 capability 零 delta。
+- `directory-browsing / 修改时间呈现格式`（Change 19）：在既有 `Entry metadata` 的取值契约之上追加呈现承诺——目录列表条目的最后修改时间以固定 `YYYY-MM-DD HH:mm:ss` 呈现，格式不随运行环境语言变化，仍按本地时区展开。显式推翻归档 `add-file-metadata` design 中「修改时间渲染为本地时区的可读形式（随 locale）」的呈现决定；`Entry metadata` 及其余 capability 零 delta。
 
 ## MVP 明确不做
 
@@ -95,3 +97,4 @@
 - **（上条已闭环）**：Change 05 归档时把冲突摆出、经用户授权改了那半句（「不包含文件类型识别能力」→「不包含文本判定之外的文件类型识别，不包含内容的编码检测与解码」），并记入 journal 观察——与 Change 03 观察 6 同一纪律，授权范围一句话为限。
 - **升级 vendored 图标时复查形状与视觉对比度**（Change 16 起，`add-directory-tree` D10 修订，2026-10-04）：`web/vendor/icons/*.svg` 与 highlight/markdown-it 同属「vendored 文件没有 lock 文件，注释就是版本记录」的家族（Change 06「vendored 资源升级时这一步要重做」同源）。**原「靠 SVG 自带 `stroke="currentColor"` 切换深浅外观」的假设已被证伪**：外链 SVG 经 `<img>` 载入不继承页面 `color`，图标一律渲染为黑；`add-directory-tree` D10 改为 **CSS mask 着色**（mask 取形状、`background-color: currentColor` 取色），`dir.svg` 换成 Octicons `file-directory-fill`（实心、16×16），`file.svg` 仍为 Lucide（描边、24×24）。升级 = 换文件 + 改注释，并复查三件事——mask 形状是否仍清晰（实心/描边均可，尺寸由 CSS `1rem` 统一，viewBox 不再需要 24×24）、`mask-image` 路径是否随之更新、目录/文件两色的观感与可区分性（浅目录 `#54aeff`——GitHub 文件树实测值、文件 `#656d76`；深目录 `#4493f8`、文件 `#8b949e`）。图标是装饰性（`aria-hidden`，语义在名称文本上），不强制 4.5:1；但深浅外观下目录/文件仍应能一眼区分，色值一动就要重看。
 - **Host 头校验（防 DNS rebinding）**（`add-remote-access` 探索切出的边界物，2026-10-04）：服务端从不校验 `Host` 头。默认回环且无 token 的模式下，恶意网页可把自身域名重新解析到 `127.0.0.1`，再以「同源」身份请求本机服务、读走目录内容——当前没有任何防御。标准堵法是只接受白名单内的 `Host`（`localhost` / `127.0.0.1` / `[::1]` / 显式监听的地址）。`add-remote-access` 未纳入：属只读场景的历史遗留，且远程模式下 token 已挡住读取，故暂记此处，待独立 Change 处理。
+- **窄视口（320px）目录表横向溢出**（Change 19 走查发现，2026-10-04）：在 320px 视口下 `documentElement.scrollWidth=385 > innerWidth=320`。把时间文本临时换回旧短格式（`2026/9/16 13:20:00`）后 scrollWidth 不变，说明与修改时间格式无关，是既有窄屏布局问题（疑与 Change 18 两栏/目录树宽度有关；34rem 断点及以上不出现）。属纯呈现层，未在本 Change 处理，待后续前端润色 Change 认领。

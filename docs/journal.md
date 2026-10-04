@@ -221,3 +221,16 @@
   2. **GitHub 真实色值靠浏览器读，而不是猜**：用 agent-browser 打开 github.com 的仓库页 + Code 树页，`getComputedStyle` 实测目录图为浅色 `#54aeff`、深色 `#9198a1`（灰）。深色 GitHub 把目录也转灰、与文件灰几乎同色、靠形状区分；我们 spec 要求「外观可区分」，故深色保留浅蓝 `#4493f8`，design D10 写明这是自觉取舍。
   3. **`/opsx-update` 修 D2 印证了 update 的正确用法**：verify 报的不一致是「文档说法落后于实现」，不是需求变化。用 update 把 design/tasks 追平实现、spec 零 delta、代码零改动，再复验——比手工改 md 干净；若当初反过来先改代码再去凑文档，就会留下「代码先变、文档追认」的窗口。与 Change 16 观察 8 的 update→apply 顺序同源，只是这次方向是「实现已定，回写文档」。
   4. **归档前 sync 的验证要数落地结果**：合入后不要只看命令成功，要复核主 spec 里 `目录树导航` 恰 1 处、9 个 Scenario、既有 9 条 Requirement 未动、无 `## ADDED` 等 delta 头泄漏，再 `openspec validate --specs`（8/8）。
+
+### 19 improve-modified-time-display
+
+- 日期：2026-10-04（归档目录 `openspec/changes/archive/2026-10-04-improve-modified-time-display/`）
+- 现象一（AI 把 Spec 写成实现方案）：**未发生**。ADDED Requirement「修改时间呈现格式」正文只写可观察结果——固定 `YYYY-MM-DD HH:mm:ss`、不随语言变化、按本地时区展开；实现细节（手写补零、用 `getFullYear`/`getMonth()+1` 等取值函数、不引入日期库/`Intl`）全部留在 design D1/D2/D3。
+- 现象二（需求变化被误做成 ADDED）：**这是本 Change 最值得记的一处判断**。proposal 明说「显式推翻归档 `add-file-metadata` design 中『修改时间渲染为本地时区的可读形式』的呈现决定」，字面像一次推翻，但那次决定当初被归为「**spec 不约束、design 定方向**」——它从未进入主 spec。既然没有旧 Requirement 可改，本次就不该用 MODIFIED，而是以 **ADDED 新 Requirement** 把这个长期被 spec 忽略的呈现行为第一次写进契约。**推翻的是 design，不是 spec；真正决定 ADDED/MODIFIED 的是「主 spec 里有没有旧条款」，不是措辞里有没有「推翻」。**
+- 现象三（Apply 偷偷扩大范围）：**未发生**。开工前最担心的是固定 19 字符在窄屏折行，design D4 把它做成**验证驱动**的决定——先在 34rem 断点实测，不折行就默认不改 CSS。实测时间列 132px（8.25rem）、单行、`scrollWidth===clientWidth`、文档不溢出，于是 `web/style.css` 零改动。把「是否改」交给实测而不是预判，避免了一次无谓改动。
+- 其他观察：
+  1. **macOS 上换浏览器语言不能靠 `--lang`**：Chromium 的 `--lang=en-US` 确实进了进程参数，但 `navigator.language` 仍随系统偏好（`zh-CN`）。可靠的「换语言/换时区」是 CDP 的 `Emulation.setLocaleOverride` / `setTimezoneOverride` 后重载。副产物很漂亮：覆盖 locale 为 en-US 后 `new Date(...).toLocaleString()` 真的会返回 `3/4/2026, 7:05:09 AM`，而我们的固定格式纹丝不动——**同一屏里同时展示了「旧实现会怎样」与「新实现不随」**，比只看一个静态结果更有说服力。
+  2. **手写格式的易错点要用已知输入钉住**：月份从 0 起、字段补零遗漏是这类格式最常见的两处错。走查特地用 `touch -t 202603040705.09` 造了一个 mtime 为 `2026-03-04 07:05:09` 的临时夹具，断言到具体字符串——月份证明 `+1`（显示 03 而非 02），`04/07/05/09` 证明补零。夹具走查后删除，属测试基建、不入 spec。
+  3. **范围外观察不扩范围**：320px 视口下文档横向溢出 `385 > 320`，但把时间文本换回旧的短格式后 scrollWidth 不变，说明与本次格式无关，是既有窄屏布局问题。按 AGENTS「发现范围外问题先摆出、不扩大当前 Change」记入 tasks 观察与想法池，未动代码。
+  4. **verify 必须每轮重读 artifact，缓存会产出过期结论**：第一次 `/opsx-verify` 我报了一条 SUGGESTION（design D1 写 `padStart(2)`、实现年用 `padStart(4)`）；用户随即把 D1 改成 `padStart(4)`，而我在第二次 verify 里**复用了先前读到的内容、没重读 design.md**，又把同一条过期建议报了一遍，被用户当场指出。教训很直接：**verify 的输入是文件当前内容，不是上一轮的记忆**；change 目录的 mtime（此处 `lastModified` 从 08:01 跳到 08:10）就是「artifact 变过」的信号，看到变化必须重读全部 artifact 再下结论。
+  5. **归档 sync**：纯 ADDED 1 条合入 `directory-browsing`（新增 Requirement + 3 Scenario，主 spec 既有 9 条 Requirement 未动），`openspec validate --specs` 8/8；change 移入 archive。这是本项目又一次「纯 ADDED、零 delta 翻案」的扩展，与 05/08/17 的 MODIFIED 演练形成对照。
