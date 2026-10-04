@@ -53,7 +53,7 @@
 | 11 | `add-file-editing` | 文件编辑与保存 | 先 Explore 保存语义 | 💡 |
 | 12 | `add-edit-conflict-detection` | 编辑期间检测外部修改 | | 💡 |
 | 13 | `add-remote-access` | 远程访问 + Token 认证 | 合并原 13/14；原 15「认证行为变化」演练取消（MODIFIED 已由 05、08 练过）；Explore 已完成 | ✅ [`2026-10-04-add-remote-access`](changes/archive/2026-10-04-add-remote-access/) |
-| 16 | `polish-file-browser` | 最终体验优化 | | 💡 |
+| 16 | `polish-file-browser` | 最终体验优化 | 视觉精修 + 类型化视觉图标；spec 进 `directory-browsing` ADDED，CSS 调优属 design 不入 spec | ✅ [`2026-10-04-polish-file-browser`](changes/archive/2026-10-04-polish-file-browser/) |
 
 ## Capability 地图
 
@@ -92,4 +92,5 @@
 - **遗留中文编码按 UTF-8 处理，中文文件会乱码**（Change 04 / design D9 的自觉取舍）：WHATWG 的编码机制结构性地只会给出 `utf-8` / `utf-16be` / `utf-16le` / `windows-1252`，**永远不返回 GBK / Shift_JIS / Big5**；真正的 CJK 检测是统计性的（uchardet、ICU），没有零依赖的 Go 等价物。理由是「不检测比检测错更诚实」——一个自信宣称「这是 GBK」却猜错的实现比明摆着的乱码更难排查。等真有用户抱怨时立独立 Change。
 - **`text-preview` 的 Purpose 写着「不包含文件类型识别能力」，Change 05 归档后这半句会变假**（与 Change 03 当年 `directory-browsing` 的 Purpose 完全同形）：archive 只合并 Requirement、不重写 Purpose。按 Change 03 的 journal 观察 6 的既定做法，届时把冲突摆出来、由用户授权改那一句并记进 journal；**不预先代改**——那条规则的纪律是「破例要重新问，不能因为上次破过就顺手破」。
 - **（上条已闭环）**：Change 05 归档时把冲突摆出、经用户授权改了那半句（「不包含文件类型识别能力」→「不包含文本判定之外的文件类型识别，不包含内容的编码检测与解码」），并记入 journal 观察——与 Change 03 观察 6 同一纪律，授权范围一句话为限。
+- **升级 Lucide 图标库时复查 dir/file 图标的 currentColor 兼容性、视图框尺寸、视觉对比度**（Change 16 vendored 资源同步纪律，2026-10-04）：`web/vendor/icons/*.svg` 与 highlight/markdown-it 同属「vendored 文件没有 lock 文件，注释就是版本记录」的家族（Change 06「vendored 资源升级时这一步要重做」同源）。升级 = 换文件 + 改注释，并重做三件事——`stroke="currentColor"` 是否仍在（深浅外观切换靠它）、视图框是否仍 24×24（D3 的 16px 尺寸论证与 `naturalWidth === 24` 断言依赖它）、两色对比度是否仍 ≥ 4.5:1（D4 实算：浅 4.54:1 / 深 5.93:1，余量不大，色值一动就要重算）。
 - **Host 头校验（防 DNS rebinding）**（`add-remote-access` 探索切出的边界物，2026-10-04）：服务端从不校验 `Host` 头。默认回环且无 token 的模式下，恶意网页可把自身域名重新解析到 `127.0.0.1`，再以「同源」身份请求本机服务、读走目录内容——当前没有任何防御。标准堵法是只接受白名单内的 `Host`（`localhost` / `127.0.0.1` / `[::1]` / 显式监听的地址）。`add-remote-access` 未纳入：属只读场景的历史遗留，且远程模式下 token 已挡住读取，故暂记此处，待独立 Change 处理。
