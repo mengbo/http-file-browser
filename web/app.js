@@ -15,6 +15,10 @@
   var imageViewEl = document.getElementById("image-view");
   var imageFallbackEl = document.getElementById("image-fallback");
   var formToggleEl = document.getElementById("form-toggle");
+  var treeToggleEl = document.getElementById("tree-toggle");
+  var sidebarEl = document.getElementById("sidebar");
+  var treeEl = document.getElementById("tree");
+  var browserEl = document.querySelector(".browser");
 
   // 错误提示按机器可读错误标识分支，而不是匹配服务端说明文本。
   var ERROR_TEXT = {
@@ -73,24 +77,63 @@
     return (root === "" ? "" : root) + relative;
   }
 
+  // renderLocation 把 #location 渲染为面包屑（add-directory-tree design D7 / 任务 3.1）：
+  // 首段是根目录绝对路径，其后每段是相对路径的一级；除末段（当前位置）外都可点，
+  // 指向对应祖先目录。全部经 textContent 写入：路径片段来自文件系统，可能含需转义的字符。
   function renderLocation(path) {
-    locationEl.textContent = locationText(path);
+    locationEl.replaceChildren();
+    var rootLabel = root === "" ? "/" : root;
+    var segments = [{ name: rootLabel, path: "" }];
+    if (path !== "") {
+      var acc = "";
+      path.split("/").forEach(function (part) {
+        acc = acc === "" ? part : acc + "/" + part;
+        segments.push({ name: part, path: acc });
+      });
+    }
+    segments.forEach(function (segment, index) {
+      if (index > 0) {
+        var separator = document.createElement("span");
+        separator.className = "breadcrumb-sep";
+        separator.setAttribute("aria-hidden", "true");
+        separator.textContent = "/";
+        locationEl.appendChild(separator);
+      }
+      if (index === segments.length - 1) {
+        var current = document.createElement("span");
+        current.className = "breadcrumb-current";
+        current.setAttribute("aria-current", "page");
+        current.textContent = segment.name;
+        locationEl.appendChild(current);
+        return;
+      }
+      var link = document.createElement("a");
+      link.className = "breadcrumb-link";
+      link.setAttribute("href", urlFor(segment.path));
+      link.textContent = segment.name;
+      link.addEventListener("click", function (event) {
+        event.preventDefault();
+        navigate(segment.path);
+      });
+      locationEl.appendChild(link);
+    });
   }
 
-  function renderParent(list) {
-    // 上级相对路径为空字符串既表示「上级就是根目录」，也表示「当前就是根目录」，
-    // 因此用 path 是否为空来判定当前所在位置，parent 只作为上级入口的目标。
-    if (list.path === "") {
-      parentLinkEl.hidden = true;
-      parentLinkEl.removeAttribute("href");
-      return;
-    }
-    parentLinkEl.setAttribute("href", urlFor(list.parent));
-    parentLinkEl.hidden = false;
+  // hideParent 收起文件视图之外那个独立的「上级目录」入口：目录列表已有表内 `..` 行
+  // （design D7），文件/搜索结果视图仍靠它导航。上级相对路径为空字符串既表示「上级就是
+  // 根目录」也表示「当前就是根目录」，所以可见性由各视图自行声明，不在这里推断。
+  function hideParent() {
+    parentLinkEl.hidden = true;
+    parentLinkEl.removeAttribute("href");
   }
 
   function renderEntries(list) {
     entriesEl.replaceChildren();
+
+    // 表内首行 `..` 指向上级（add-directory-tree design D7 / 任务 3.2）：不在根目录时出现。
+    if (list.path !== "") {
+      entriesEl.appendChild(parentRow(list.parent));
+    }
 
     list.entries.forEach(function (entry) {
       var item = document.createElement("li");
@@ -99,10 +142,10 @@
       // 类型化视觉图标（polish-file-browser design D2/D6）：目录条目与文件条目以
       // 不同的视觉图标呈现，src 由 entry.type 决定。装饰元素（alt="" + aria-hidden），
       // 屏幕阅读器跳过；信息承载在 .entry-link 的文本上（spec: 类型化视觉图标）。
-      var icon = document.createElement("img");
-      icon.className = "entry-icon";
-      icon.setAttribute("src", entry.type === "directory" ? "/vendor/icons/dir.svg" : "/vendor/icons/file.svg");
-      icon.setAttribute("alt", "");
+      // 图标是 CSS mask 着色的空元素（design D10/D14）：形状来自 vendored SVG，颜色来自 currentColor，
+      // 因而不再是 <img>（外链 SVG 的 currentColor 不继承页面 color，会渲染成黑）。
+      var icon = document.createElement("span");
+      icon.className = "entry-icon " + (entry.type === "directory" ? "entry-icon-dir" : "entry-icon-file");
       icon.setAttribute("aria-hidden", "true");
       item.appendChild(icon);
 
@@ -132,6 +175,32 @@
     // 列名行跟着条目数走：零行时三个列名没有对应的列。
     // 隐藏靠 style.css 顶部的 [hidden] 兜底规则，不在这里另写 display（Change 02 观察 2）。
     entriesHeaderEl.hidden = list.entries.length === 0;
+  }
+
+  // parentRow 建表内首行 `..`（design D7 / 任务 3.2）：GitHub 形态的上级入口，
+  // 与普通条目同构（图标 / 名称 / 大小 / 修改时间四列对齐），点击进入上级目录。
+  function parentRow(parentPath) {
+    var item = document.createElement("li");
+    item.className = "entry entry-parent";
+
+    var icon = document.createElement("span");
+    icon.className = "entry-icon entry-icon-dir";
+    icon.setAttribute("aria-hidden", "true");
+    item.appendChild(icon);
+
+    var link = document.createElement("a");
+    link.className = "entry-name entry-link";
+    link.setAttribute("href", urlFor(parentPath));
+    link.textContent = "..";
+    link.addEventListener("click", function (event) {
+      event.preventDefault();
+      navigate(parentPath);
+    });
+    item.appendChild(link);
+
+    item.appendChild(textCell("entry-size", ""));
+    item.appendChild(textCell("entry-time", ""));
+    return item;
   }
 
   // textCell 建一个只装文本的单元格。条目名的 textContent 不变量覆盖全部三个字段：
@@ -225,13 +294,206 @@
     imageFallbackEl.textContent = "";
   }
 
+  // ============ 目录树（add-directory-tree design D2/D3/D5/D6/D10/D11）============
+
+  // 懒加载数据层：以相对路径为键缓存已取回的 children（design D2），并缓存进行中的请求，
+  // 保证同一目录在展开与「按 URL 展开祖先」两处并发触发时只发一次 /api/list。
+  var treeLists = new Map();     // path -> 该目录的条目数组（/api/list 的 entries）
+  var treeRequests = new Map();  // path -> 进行中的请求 Promise
+  var treeExpanded = new Set();  // 处于展开状态的目录路径（design D5）
+  var treeActivePath = "";       // 当前浏览位置（目录或文件），用于标出当前位置
+
+  function fetchTreeList(path) {
+    if (treeLists.has(path)) {
+      return Promise.resolve(treeLists.get(path));
+    }
+    if (treeRequests.has(path)) {
+      return treeRequests.get(path);
+    }
+    var request = fetchJSON("/api/list?path=" + encodeURIComponent(path)).then(function (result) {
+      treeRequests.delete(path);
+      if (!result.ok) {
+        throw new Error("tree list failed");
+      }
+      treeLists.set(path, result.body.entries);
+      return result.body.entries;
+    }, function (err) {
+      treeRequests.delete(path);
+      throw err;
+    });
+    treeRequests.set(path, request);
+    return request;
+  }
+
+  // ancestorDirs 返回「为让当前位置出现在树中而必须展开的全部祖先目录」：根目录，
+  // 以及当前位置父目录的每一级前缀。当前位置本身不在此列——spec 只要求祖先展开（design D5）。
+  function ancestorDirs(path) {
+    var dirs = [""];
+    var parent = parentOf(path);
+    if (parent !== "") {
+      var acc = "";
+      parent.split("/").forEach(function (part) {
+        acc = acc === "" ? part : acc + "/" + part;
+        dirs.push(acc);
+      });
+    }
+    return dirs;
+  }
+
+  // updateTree 在每次 load() 后重算树的当前位置与祖先展开（design D5）：把祖先链强制加入
+  // expanded，确保它们已加载，再重绘。用户可随即折叠某个祖先；下一次 load() 会再次强制展开。
+  function updateTree(path) {
+    treeActivePath = path;
+    var dirs = ancestorDirs(path);
+    dirs.forEach(function (dir) {
+      treeExpanded.add(dir);
+    });
+    Promise.all(dirs.map(function (dir) {
+      return fetchTreeList(dir).catch(function () {
+        return null;
+      });
+    })).then(function () {
+      renderTree();
+    });
+  }
+
+  // renderTree 从缓存与展开集合整棵重建树（design D2/D5）：不保留 DOM 局部状态，
+  // 每次展开/折叠/导航后重绘，缓存保证重绘不产生新请求。根目录未就绪时先给一行加载提示。
+  function renderTree() {
+    treeEl.replaceChildren();
+    if (!treeLists.has("")) {
+      treeEl.appendChild(treeLoadingItem());
+      return;
+    }
+    appendTreeChildren(treeEl, "");
+  }
+
+  function treeLoadingItem() {
+    var item = document.createElement("li");
+    item.className = "tree-loading";
+    item.textContent = "正在加载…";
+    return item;
+  }
+
+  function appendTreeChildren(container, dirPath) {
+    (treeLists.get(dirPath) || []).forEach(function (entry) {
+      container.appendChild(buildTreeItem(entry, joinPath(dirPath, entry.name)));
+    });
+  }
+
+  // buildTreeItem 渲染一个节点（design D10/D11）：目录是「disclosure 按钮 + 名称链接」，
+  // 文件是「占位 + 名称链接」；原生 <ul>/<li> 嵌套，不采用完整 ARIA tree 模式。
+  // disclosure 只负责展开/折叠，名称链接只负责导航，两个动作各有其入口。
+  function buildTreeItem(entry, path) {
+    var item = document.createElement("li");
+    item.className = "tree-item";
+    var row = document.createElement("div");
+    row.className = "tree-row";
+    var isDir = entry.type === "directory";
+    var expanded = isDir && treeExpanded.has(path);
+
+    if (isDir) {
+      var disclosure = document.createElement("button");
+      disclosure.type = "button";
+      disclosure.className = "tree-disclosure";
+      disclosure.setAttribute("aria-expanded", expanded ? "true" : "false");
+      disclosure.setAttribute("aria-label", (expanded ? "收起 " : "展开 ") + entry.name);
+      disclosure.addEventListener("click", function () {
+        toggleTreeDir(path);
+      });
+      row.appendChild(disclosure);
+    } else {
+      var spacer = document.createElement("span");
+      spacer.className = "tree-disclosure-space";
+      spacer.setAttribute("aria-hidden", "true");
+      row.appendChild(spacer);
+    }
+
+    var link = document.createElement("a");
+    link.className = "tree-label";
+    link.setAttribute("href", urlFor(path));
+    if (path === treeActivePath) {
+      link.classList.add("active");
+      link.setAttribute("aria-current", "true");
+    }
+    var icon = document.createElement("span");
+    icon.className = "tree-icon " + (isDir ? "tree-icon-dir" : "tree-icon-file");
+    icon.setAttribute("aria-hidden", "true");
+    link.appendChild(icon);
+    var name = document.createElement("span");
+    name.className = "tree-name";
+    name.textContent = entry.name;
+    link.appendChild(name);
+    link.addEventListener("click", function (event) {
+      event.preventDefault();
+      navigate(path);
+    });
+    row.appendChild(link);
+    item.appendChild(row);
+
+    if (expanded) {
+      var children = document.createElement("ul");
+      children.className = "tree-children";
+      if (treeLists.has(path)) {
+        appendTreeChildren(children, path);
+      } else {
+        children.appendChild(treeLoadingItem());
+      }
+      item.appendChild(children);
+    }
+    return item;
+  }
+
+  // toggleTreeDir 折叠/展开一个目录节点（design D2/D5）：展开时若 children 未缓存才请求，
+  // 缓存命中即直接重绘，不再发请求。
+  function toggleTreeDir(path) {
+    if (treeExpanded.has(path)) {
+      treeExpanded.delete(path);
+      renderTree();
+      return;
+    }
+    treeExpanded.add(path);
+    renderTree();
+    if (!treeLists.has(path)) {
+      fetchTreeList(path).then(function () {
+        renderTree();
+      }, function () {
+        renderTree();
+      });
+    }
+  }
+
+  // ============ 目录树面板收起/展开（design D12 / spec: The tree can be collapsed and expanded）============
+
+  // 侧栏整块收纳搜索与目录树。窄视口默认收起（design D12）：主区独占整行，维持
+  // 「320px 下不横向溢出」的既有纪律；收起后 #tree-toggle 仍在主区工具栏上，用于展开。
+  var NARROW_QUERY = "(max-width: 34rem)";
+  var treeCollapsed = false;
+
+  function setTreeCollapsed(collapsed) {
+    treeCollapsed = collapsed;
+    browserEl.classList.toggle("tree-collapsed", collapsed);
+    sidebarEl.hidden = collapsed;
+    treeToggleEl.setAttribute("aria-expanded", collapsed ? "false" : "true");
+    treeToggleEl.textContent = collapsed ? "目录树" : "收起目录树";
+  }
+
+  treeToggleEl.addEventListener("click", function () {
+    setTreeCollapsed(!treeCollapsed);
+  });
+
   function render(list) {
     clearError();
     renderLocation(list.path);
-    renderParent(list);
+    // 目录列表的上级入口改为表内 `..` 行（design D7），独立的上级 nav 让位给文件/搜索视图。
+    hideParent();
     renderEntries(list);
     hideMatches();
     hidePreview();
+    // 把主区刚取回的列表喂给树缓存（design D3 共享缓存），树据此立即渲染根/当前目录，
+    // 不重复发 /api/list；随后重算当前位置与祖先展开。
+    treeLists.set(list.path, list.entries);
+    updateTree(list.path);
   }
 
   // D3 语言识别：名字优先、内容兜底的激进策略。这是「装饰」不是「门」——判错只是颜色不对，
@@ -455,6 +717,8 @@
     // 文件的上级就是它所在的目录；文件位于根目录时该入口指向根目录本身。
     parentLinkEl.setAttribute("href", urlFor(parentOf(content.path)));
     parentLinkEl.hidden = false;
+    // 文件视图中树保持可用并标出该文件位置（spec: Tree remains available in file view）。
+    updateTree(content.path);
     currentFile = content;
     var markdown = isMarkdownPath(content.path);
     updateFormToggle(markdown);
@@ -538,6 +802,8 @@
     // 所在目录，上级入口沿用 parentOf 客户端推导，零变化（design D5）。
     parentLinkEl.setAttribute("href", urlFor(parentOf(path)));
     parentLinkEl.hidden = false;
+    // 图片视图同样保持树可用并标出该图片位置（spec: Tree remains available in file view）。
+    updateTree(path);
 
     // 状态先于 src 就位：error 最迟在下一轮任务循环触发，加载态与回退说明必须先收好。
     // src 指向图片内容端点；图片路径不请求 /api/content，零浪费请求（design D4）。
@@ -570,9 +836,10 @@
     hideEntries();
     hideMatches();
     hidePreview();
-    parentLinkEl.hidden = true;
-    parentLinkEl.removeAttribute("href");
-    locationEl.textContent = locationText(currentPath());
+    hideParent();
+    renderLocation(currentPath());
+    // 错误态下树仍可用（design D6 / 任务 2.5）：以失败路径标出当前位置，用户可经树离开。
+    updateTree(currentPath());
     showError(ERROR_TEXT[code] || message || "无法打开该位置");
   }
 
@@ -588,15 +855,20 @@
     hideEntries();
     hidePreview();
 
-    // 位置行表明这是结果视图、基准在哪、查的什么；上级入口沿用列表语义，从基准位置向上。
-    locationEl.textContent = locationText(result.path) + " — 搜索 “" + result.query + "”";
+    // 位置行表明这是结果视图、基准在哪、查的什么；面包屑之后追加一段搜索说明。
+    renderLocation(result.path);
+    var searchNote = document.createElement("span");
+    searchNote.className = "breadcrumb-search";
+    searchNote.textContent = " — 搜索 “" + result.query + "”";
+    locationEl.appendChild(searchNote);
     if (result.path === "") {
-      parentLinkEl.hidden = true;
-      parentLinkEl.removeAttribute("href");
+      hideParent();
     } else {
       parentLinkEl.setAttribute("href", urlFor(parentOf(result.path)));
       parentLinkEl.hidden = false;
     }
+    // 搜索结果视图下树仍可用，并以搜索基准位置标出（spec: Tree remains available in file view）。
+    updateTree(result.path);
 
     matchesEl.replaceChildren();
     result.matches.forEach(function (match) {
@@ -736,6 +1008,11 @@
     window.history.pushState({}, "", target);
     load();
   });
+
+  // 初始收起态：窄视口默认收起侧栏（design D12），宽视口展开；同步按钮 aria 状态。
+  setTreeCollapsed(window.matchMedia(NARROW_QUERY).matches);
+  // 先给树一行加载提示，避免首屏空侧栏；load() 后 updateTree 会以真实数据重绘。
+  renderTree();
 
   // 根目录来自 /api/health：浏览位置在 URL 与列表响应中都是相对路径，
   // 绝对位置由健康端点提供的根目录拼出。

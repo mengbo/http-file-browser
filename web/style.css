@@ -16,24 +16,71 @@ body {
   color: #1f2328;
 }
 
+/* 两栏骨架（add-directory-tree design D1）：左侧 17rem 常驻目录树，右侧主区吃剩余宽度。
+   main 列用 minmax(0, 1fr) 而不是 1fr：后者的最小尺寸是内容宽度，长文件名/长路径会把整页撑宽。
+   原 46rem 居中单列撤销（design D1 的 Alternative 已否决「两栏挤进 46rem」）。 */
 .browser {
-  max-width: 46rem;
-  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 17rem minmax(0, 1fr);
+  gap: 1.5rem;
+  align-items: start;
   padding: 2rem 1.25rem 4rem;
 }
 
+/* 整棵目录树收起（design D12 / spec: The tree can be collapsed and expanded）：侧栏让位，主区独占整行。 */
+.browser.tree-collapsed {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.sidebar {
+  position: sticky;
+  top: 2rem;
+  max-height: calc(100vh - 4rem);
+  overflow-y: auto;
+}
+
+/* 主区最小宽度归零：网格轨道的 minmax(0, 1fr) 只约束轨道，内容仍可能撑宽，这里再兜一道。 */
+.main {
+  min-width: 0;
+}
+
 .toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "title toggle"
+    "location location";
+  align-items: baseline;
+  column-gap: 1rem;
   padding-bottom: 0.75rem;
   border-bottom: 1px solid #d0d7de;
 }
 
+/* 整棵目录树的收起/展开开关（design D12）：主区部件，侧栏收起后仍在。 */
+.tree-toggle {
+  grid-area: toggle;
+  padding: 0.25rem 0.6rem;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  background: #f6f8fa;
+  color: #24292f;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.tree-toggle:hover {
+  background: #eef1f4;
+}
+
 .title {
-  margin: 0 0 0.25rem;
+  grid-area: title;
+  margin: 0;
   font-size: 1.25rem;
 }
 
-/* 根目录加相对路径可能很长，窄窗口下换行而不是撑破布局。 */
+/* 当前位置面包屑（add-directory-tree design D7）：根目录加相对路径可能很长，窄窗口下换行而不是撑破布局。 */
 .location {
+  grid-area: location;
   margin: 0;
   font-size: 0.85rem;
   color: #656d76;
@@ -66,8 +113,155 @@ body {
   text-decoration: underline;
 }
 
+/* ============ 当前位置面包屑（add-directory-tree design D7）============ */
+
+/* 面包屑是一行可换行的段序列：段间以浅色 `/` 分隔，祖先段是链接、末段是当前位置。 */
+.breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 0.3rem;
+}
+
+.breadcrumb-link {
+  color: #0969da;
+  text-decoration: none;
+}
+
+.breadcrumb-link:hover {
+  text-decoration: underline;
+}
+
+.breadcrumb-sep {
+  color: #656d76;
+}
+
+/* 末段（当前位置）用正文色加粗，与可点的祖先段区分开。 */
+.breadcrumb-current {
+  color: #1f2328;
+  font-weight: 600;
+}
+
+.breadcrumb-search {
+  color: #656d76;
+}
+
+/* ============ 目录树（add-directory-tree design D10/D11）============ */
+
+.tree-panel {
+  margin: 0;
+}
+
+.tree,
+.tree-children {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* 缩进一层，表达父子层级；根目录直接子条目顶格。 */
+.tree-children {
+  padding-left: 0.9rem;
+}
+
+.tree-row {
+  display: flex;
+  align-items: center;
+  border-radius: 6px;
+}
+
+.tree-row:hover {
+  background: #f6f8fa;
+}
+
+/* disclosure 与文件行的占位同宽：不管有没有三角，名称列都从同一竖线起。
+   align-self: stretch 让点击区随行高伸展，而不是固定 1.5rem（design D14 的行距对齐）。 */
+.tree-disclosure,
+.tree-disclosure-space {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: stretch;
+  width: 1.25rem;
+}
+
+.tree-disclosure {
+  border: none;
+  background: none;
+  padding: 0;
+  color: #656d76;
+  cursor: pointer;
+}
+
+/* CSS 画的右向三角（design D10：不新增 vendored chevron 资源），展开时转 90°。 */
+.tree-disclosure::before {
+  content: "";
+  display: inline-block;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  border-left: 5px solid currentColor;
+  transition: transform 0.12s ease;
+}
+
+.tree-disclosure[aria-expanded="true"]::before {
+  transform: rotate(90deg);
+}
+
+.tree-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  /* 行距比初版松、比主区列表紧（design D14）：0.35rem + line-height 1.55，
+     GitHub 的目录树本就比文件表更紧凑，不追求行高完全相等。 */
+  padding: 0.35rem 0.35rem 0.35rem 0;
+  color: #1f2328;
+  /* 与主区列表同字号（design D14）：两栏字号不一会让布局在视觉上分裂。 */
+  font-size: 0.95rem;
+  line-height: 1.55;
+  text-decoration: none;
+  border-radius: 6px;
+}
+
+.tree-label:hover {
+  text-decoration: underline;
+}
+
+/* 当前位置标出（spec: Current position is marked with ancestors expanded）。 */
+.tree-label.active {
+  background: #ddf4ff;
+  font-weight: 600;
+}
+
+.tree-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 目录树图标的尺寸、着色与 mask 形状源见下方 .entry-icon/.tree-icon 共享规则（design D10/D14）。 */
+
+.tree-loading {
+  padding: 0.3rem 0.5rem;
+  color: #656d76;
+  font-size: 0.8rem;
+}
+
+/* ============ GitHub 风格文件表（add-directory-tree design D8）============ */
+
+/* 圆角边框容器把表头与条目行套成一张表；overflow: hidden 让容器圆角裁住行背景。 */
+.file-table {
+  margin-top: 0.75rem;
+  border: 1px solid #d1d9e0;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
 .entries {
-  margin: 0.5rem 0 0;
+  margin: 0;
   padding: 0;
   list-style: none;
 }
@@ -88,20 +282,27 @@ body {
   align-items: baseline;
 }
 
+/* 表头底 / 文字色 / 12px 粗体（design D8 的 GitHub 取值）。 */
 .entries-header {
-  padding: 0 0.5rem 0.25rem;
+  padding: 0.4rem 0.75rem;
   font-size: 0.75rem;
-  color: #656d76;
-  border-bottom: 1px solid #d0d7de;
+  font-weight: 600;
+  color: #59636e;
+  background: #f6f8fa;
+  border-bottom: 1px solid #d1d9e0;
 }
 
 .entry {
-  padding: 0.55rem 0.5rem;
-  border-radius: 6px;
-  border-bottom: 1px solid #d8dee4;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid #d1d9e0;
   font-size: 0.95rem;
   line-height: 1.55;
   overflow-wrap: anywhere;
+}
+
+/* 容器内的最后一行不再画分隔线，否则与容器下边框叠成双线。 */
+.entry:last-child {
+  border-bottom: none;
 }
 
 /* 名称列是三列里唯一需要换行的，minmax(0, …) 的 0 正是为它留的。 */
@@ -111,17 +312,46 @@ body {
   min-width: 0;
 }
 
-/* 类型化视觉图标（polish-file-browser design D3/D4）：首列自动宽度由图标 + margin 决定，
-   图标尺寸 16×16 与正文字号齐平；vertical-align: middle 对齐 Lucide 视图框中心与文字
-   x-height（中线附近）；flex-shrink: 0 防窄屏 grid 收缩。color 走 currentColor
-   （vendored SVG 自带 stroke="currentColor"，1.1），深浅外观切换见下方媒体查询。 */
-.entry-icon {
+/* 类型化视觉图标（polish-file-browser design D3/D4；add-directory-tree design D10/D14）：
+   图标以 CSS mask 着色——外链 SVG 经 <img> 载入时 currentColor 不继承页面 color（实测渲染为黑），
+   改用「mask 取形状 + background-color: currentColor 取颜色」，颜色随之随深浅外观切换。
+   尺寸 16×16 与正文字号齐平；.entry-icon 的 vertical-align 对齐文字中线；flex-shrink 防窄屏收缩。 */
+.entry-icon,
+.tree-icon {
+  display: inline-block;
   width: 1rem;
   height: 1rem;
   flex-shrink: 0;
+  background-color: currentColor;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+}
+
+.entry-icon {
   vertical-align: middle;
   margin-right: 0.4rem;
+}
+
+/* 形状源：目录为实心文件夹（GitHub Octicons file-directory-fill），文件为文档描边（Lucide file）。
+   目录图标蓝、文件图标灰（design D8/D14）：两类条目在表内与树中一眼可辨。 */
+/* 目录蓝取自 GitHub 文件树实测值 #54aeff（浅色）；图标为装饰性（aria-hidden，语义在名称文本上），
+   对比度按装饰元素处理，不要求 4.5:1。 */
+.entry-icon-dir,
+.tree-icon-dir {
+  color: #54aeff;
+  -webkit-mask-image: url(/vendor/icons/dir.svg);
+  mask-image: url(/vendor/icons/dir.svg);
+}
+
+.entry-icon-file,
+.tree-icon-file {
   color: #656d76;
+  -webkit-mask-image: url(/vendor/icons/file.svg);
+  mask-image: url(/vendor/icons/file.svg);
 }
 
 .entry-size,
@@ -140,9 +370,10 @@ body {
 /* 条目一律可进入（目录与文件同一条链接规则）：可点外观与 hover 反馈都挂在 entry-link 上。
    类名沿用 Change 02 的词汇：entry-name 表达「这是名称列」，entry-link 表达「这一行可点」，
    两个类分开，样式就不用靠标签名去猜哪个条目是目录。 */
+/* 名称文字近黑（design D8），不再用链接蓝；可点暗示由整行 hover 背景与 hover 下划线补足。 */
 .entry-link {
   display: block;
-  color: #0969da;
+  color: #1f2328;
   text-decoration: none;
 }
 
@@ -499,23 +730,38 @@ body {
     color: #e6edf3;
   }
 
-  .toolbar,
+  .toolbar {
+    border-bottom-color: #30363d;
+  }
+
+  /* 文件表容器与表头（design D8 深色）：容器边框、表头底与文字换到 Primer 深色值。 */
+  .file-table {
+    border-color: #30363d;
+  }
+
   .entries-header {
+    background: #161b22;
+    color: #8b949e;
     border-bottom-color: #30363d;
   }
 
   .location,
   .empty,
-  .entries-header,
   .entry-size,
   .entry-time {
     color: #8b949e;
   }
 
   /* 类型化视觉图标深色配色（polish-file-browser design D4 定稿）：GitHub 弱化灰
-     #8b949e on #0d1117，对比度 ≈ 6.15:1（WCAG AA）。 */
-  .entry-icon {
+     #8b949e on #0d1117，对比度 ≈ 6.15:1（WCAG AA）；目录图标用强调蓝 #4493f8。 */
+  .entry-icon-file,
+  .tree-icon-file {
     color: #8b949e;
+  }
+
+  .entry-icon-dir,
+  .tree-icon-dir {
+    color: #4493f8;
   }
 
   .error {
@@ -523,9 +769,47 @@ body {
     color: #ff7b72;
   }
 
+  /* 名称与树标签深色下用近白（design D8）；父级入口与面包屑祖先段用强调蓝。 */
   .parent-link,
-  .entry-link {
+  .breadcrumb-link {
     color: #4493f8;
+  }
+
+  .entry-link,
+  .tree-label {
+    color: #e6edf3;
+  }
+
+  .breadcrumb-sep,
+  .breadcrumb-search,
+  .tree-loading {
+    color: #8b949e;
+  }
+
+  .breadcrumb-current {
+    color: #e6edf3;
+  }
+
+  .tree-row:hover {
+    background: #161b22;
+  }
+
+  .tree-label.active {
+    background: #163356;
+  }
+
+  .tree-disclosure {
+    color: #8b949e;
+  }
+
+  .tree-toggle {
+    background: #21262d;
+    border-color: #30363d;
+    color: #e6edf3;
+  }
+
+  .tree-toggle:hover {
+    background: #30363d;
   }
 
   .form-toggle {
@@ -564,7 +848,7 @@ body {
   }
 
   .entry {
-    border-bottom-color: #21262d;
+    border-bottom-color: #30363d;
   }
 
   .entry:has(.entry-link):hover {

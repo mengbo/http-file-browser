@@ -10,59 +10,83 @@
   <link rel="stylesheet" href="/vendor/highlight.min.css">
 </head>
 <body>
-  <main class="browser">
-    <header class="toolbar">
-      <h1 class="title">http-file-browser</h1>
-      <p id="location" class="location" aria-live="polite">正在加载…</p>
-      <!-- 搜索入口（add-file-search）：以当前浏览位置为基准按名称搜索子树。
+  <!-- 两栏骨架（add-directory-tree design D1）：左侧栏常驻目录树，右主区承载四种互斥视图。
+       既有全部元素 id 保持不变（任务 1.1），仅把它们收进 #main；侧栏由 #tree-toggle 整体收起。 -->
+  <div class="browser">
+    <aside id="sidebar" class="sidebar">
+      <!-- 搜索入口（add-file-search / add-directory-tree design D9）：以当前浏览位置为基准按名称搜索子树。
            空输入提交不动作由 app.js 的 submit 处理拦截（design D9）；
-           提交成功后 URL 变为 /?path=<base>&q=<query>，视图切换走 load()。 -->
+           提交成功后 URL 变为 /?path=<base>&q=<query>，视图切换走 load()。
+           本 Change 只把位置从 toolbar 移到侧栏顶部，语义零变化（任务 3.4）。 -->
       <form id="search-form" class="search-form">
         <input id="search-input" class="search-input" type="search" name="q"
                placeholder="按名称搜索当前目录子树…" aria-label="按名称搜索当前目录子树"
                autocomplete="off">
       </form>
-    </header>
 
-    <p id="error" class="error" role="alert" hidden></p>
+      <!-- 目录树（add-directory-tree）：常驻侧栏，按需加载 /api/list；#tree 由 app.js 渲染。
+           整棵侧栏由 #tree-toggle 收起/展开（design D12），收起时 #sidebar 由 app.js 隐藏。 -->
+      <nav id="tree-panel" class="tree-panel" aria-label="目录树">
+        <ul id="tree" class="tree"></ul>
+      </nav>
+    </aside>
 
-    <nav class="parent">
-      <a id="parent-link" class="parent-link" href="/" hidden>↑ 上级目录</a>
-    </nav>
+    <main id="main" class="main">
+      <header class="toolbar">
+        <!-- 整棵目录树的收起/展开开关（design D12）：主区部件，侧栏收起后仍可见。
+             窄屏默认收起，由 app.js 按视口宽度初始化并同步 aria-expanded。 -->
+        <button id="tree-toggle" class="tree-toggle" type="button"
+                aria-controls="sidebar" aria-expanded="true">目录树</button>
+        <h1 class="title">http-file-browser</h1>
+        <!-- 当前位置（add-directory-tree design D7）：由纯文本升级为面包屑，
+             由 app.js 的 renderLocation 逐段写入（首段根目录绝对路径，其后可点链接）。 -->
+        <nav id="location" class="location breadcrumb" aria-live="polite" aria-label="当前位置">正在加载…</nav>
+      </header>
 
-    <!-- 列名行在零条目时由 app.js 隐藏：一个描述零行的表头没有意义。
-         首列留空对应类型化视觉图标（polish-file-browser design D6）。 -->
-    <div id="entries-header" class="entries-header" aria-hidden="true">
-      <span class="entry-head" aria-hidden="true"></span>
-      <span class="entry-head">名称</span>
-      <span class="entry-size">大小</span>
-      <span class="entry-time">修改时间</span>
-    </div>
+      <p id="error" class="error" role="alert" hidden></p>
 
-    <ul id="entries" class="entries"></ul>
+      <nav class="parent">
+        <a id="parent-link" class="parent-link" href="/" hidden>↑ 上级目录</a>
+      </nav>
 
-    <p id="empty" class="empty" hidden>此目录为空</p>
+      <!-- 文件表容器（add-directory-tree design D8）：圆角边框把表头与条目行套成一个 GitHub 风格的表。
+           既有 id 与列结构不变，仅加一层容器承载边框与表头底。 -->
+      <div class="file-table">
+        <!-- 列名行在零条目时由 app.js 隐藏：一个描述零行的表头没有意义。
+             首列留空对应类型化视觉图标（polish-file-browser design D6）。 -->
+        <div id="entries-header" class="entries-header" aria-hidden="true">
+          <span class="entry-head" aria-hidden="true"></span>
+          <span class="entry-head">名称</span>
+          <span class="entry-size">大小</span>
+          <span class="entry-time">修改时间</span>
+        </div>
 
-    <!-- 搜索结果视图（add-file-search）：行结构与列表条目同构，名称 / 所在目录 / 类型
-         三列全部经 textContent 写入（app.js renderMatches）。与 #entries 互斥呈现：
-         列表视图与错误态由 app.js 收起本视图。 -->
-    <ul id="matches" class="matches" hidden></ul>
-    <p id="no-matches" class="empty" hidden>没有名称匹配的条目</p>
+        <ul id="entries" class="entries"></ul>
+      </div>
 
-    <!-- 文件视图：列表三列与空目录提示都让位给内容。素文本路径经 textContent 写入；
-         Markdown 文件有渲染与源码两种呈现形式，各挂一条防线（app.js safeHighlightHTML 上方注释）：
-         渲染形式靠 markdown-it html:false 配置性封闭，源码形式与普通高亮路径靠 hljs 输出形状校验。 -->
-    <!-- 呈现形式切换（improve-markdown-preview design D3）：必须独立于 #preview——它的内容被
-         innerHTML/textContent 整体覆盖，控件放里面活不过第一次写入。仅查看 Markdown 文件时由 app.js
-         显示（渲染、源码、回退三态），文案表达目标形式，不写 History/URL。 -->
-    <button id="form-toggle" class="form-toggle" type="button" hidden>查看源码</button>
-    <pre id="preview" class="preview" hidden></pre>
-    <!-- 图片视图（image-preview design D5）：不进 #preview——那里的不变量是「textContent 等于
-         文件内容」或「承载渲染 HTML」，图片字节两者都不是，由独立挂载点与 #preview 平级、
-         同受 hidePreview 清理。加载失败时 app.js 隐藏本元素、显示 #image-fallback 的回退说明。 -->
-    <img id="image-view" class="image-view" alt="" hidden>
-    <p id="image-fallback" class="image-fallback" hidden></p>
-  </main>
+      <p id="empty" class="empty" hidden>此目录为空</p>
+
+      <!-- 搜索结果视图（add-file-search）：行结构与列表条目同构，名称 / 所在目录 / 类型
+           三列全部经 textContent 写入（app.js renderMatches）。与 #entries 互斥呈现：
+           列表视图与错误态由 app.js 收起本视图。 -->
+      <ul id="matches" class="matches" hidden></ul>
+      <p id="no-matches" class="empty" hidden>没有名称匹配的条目</p>
+
+      <!-- 文件视图：列表三列与空目录提示都让位给内容。素文本路径经 textContent 写入；
+           Markdown 文件有渲染与源码两种呈现形式，各挂一条防线（app.js safeHighlightHTML 上方注释）：
+           渲染形式靠 markdown-it html:false 配置性封闭，源码形式与普通高亮路径靠 hljs 输出形状校验。 -->
+      <!-- 呈现形式切换（improve-markdown-preview design D3）：必须独立于 #preview——它的内容被
+           innerHTML/textContent 整体覆盖，控件放里面活不过第一次写入。仅查看 Markdown 文件时由 app.js
+           显示（渲染、源码、回退三态），文案表达目标形式，不写 History/URL。 -->
+      <button id="form-toggle" class="form-toggle" type="button" hidden>查看源码</button>
+      <pre id="preview" class="preview" hidden></pre>
+      <!-- 图片视图（image-preview design D5）：不进 #preview——那里的不变量是「textContent 等于
+           文件内容」或「承载渲染 HTML」，图片字节两者都不是，由独立挂载点与 #preview 平级、
+           同受 hidePreview 清理。加载失败时 app.js 隐藏本元素、显示 #image-fallback 的回退说明。 -->
+      <img id="image-view" class="image-view" alt="" hidden>
+      <p id="image-fallback" class="image-fallback" hidden></p>
+    </main>
+  </div>
   <!-- hljs 与 markdown-it 必须先于 app.js 就位：renderContent 直接引用全局 hljs 与 markdownit。 -->
   <script src="/vendor/highlight.min.js"></script>
   <script src="/vendor/markdown-it.min.js"></script>
