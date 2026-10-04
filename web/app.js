@@ -230,15 +230,24 @@
     return value.toFixed(1) + " " + units[index];
   }
 
-  // formatModifiedAt 把 Unix 整秒渲染为本时区的可读形式。
-  // 服务端保证的是「取值」与时区无关（design D6），显示字符串本就是本地化的——
-  // 同一目录在两台时区不同的机器上看到不同的日期字符串是正确的，不是缺陷。
+  // formatModifiedAt 把 Unix 整秒渲染为固定格式 YYYY-MM-DD HH:mm:ss。
+  // 手写补零而不走 Date 的本地化排布：后者随运行环境 locale 变化
+  // （en-US 下会显示 10/4/2026, 11:35:25 AM），且 10/4 这类写法有月/日歧义。
+  // getFullYear 等取值函数返回本地时区字段，故时区语义不变（仍按本地时区），
+  // 本次只把排版固定下来（improve-modified-time-display design D1 / D2）。
   function formatModifiedAt(seconds) {
     if (typeof seconds !== "number" || !isFinite(seconds)) {
       return "";
     }
     // Date 构造器吃毫秒，秒/毫秒差一千倍是这里最容易犯的错。
-    return new Date(seconds * 1000).toLocaleString();
+    var date = new Date(seconds * 1000);
+    var year = String(date.getFullYear()).padStart(4, "0");
+    var month = String(date.getMonth() + 1).padStart(2, "0");
+    var day = String(date.getDate()).padStart(2, "0");
+    var hours = String(date.getHours()).padStart(2, "0");
+    var minutes = String(date.getMinutes()).padStart(2, "0");
+    var secs = String(date.getSeconds()).padStart(2, "0");
+    return year + "-" + month + "-" + day + " " + hours + ":" + minutes + ":" + secs;
   }
 
   // hideEntries 把列表视图整体收起来：文件视图与错误态都不显示条目与列名。
