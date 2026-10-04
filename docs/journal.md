@@ -149,3 +149,17 @@
   2. **「无上限」没有负测试可写**：spec 不设大小上限，测试无法证明「不存在的限制不存在」；D3 的实际保障是传输路径本身（流式拷贝、内存与文件大小无关），落在测试里的只有路径正确性断言（响应体逐字节等于文件内容）。设计决策承担的部分，别指望测试清单背书。
   3. **前后端双清单的同步靠注释互引 + 双向无害论证**：零构建单二进制约束下没有共享配置的便宜方案，`IMAGE_EXTENSIONS`（app.js）与 `imageExtensions`（image.go）各自独立声明、注释互引提醒同步；漂移两个方向都无害的论证（design D4）让「不同步也不撒谎」成立——同步是本意，不是安全依赖。
   4. **归档时确认 Purpose 仍然为真**（Change 03 观察 6 纪律第五次执行）：`image-preview` 的 Purpose 写「不包含文本型图像格式（如 SVG）的呈现」「不包含图片内容的修改与写回」——实现无 SVG 分支、端点 GET 只读，成立。`service-startup` 的 Purpose「静态页面与 JSON 接口如何划分」在图片字节开口后有一丝张力，但「划分」仍是该 capability 的主题、例外是划分的一部分，不改；如实记录备查。
+
+### 17 improve-root-confinement
+
+- 日期：2026-10-04（归档目录 `openspec/changes/archive/2026-10-04-improve-root-confinement/`）
+- 现象一（AI 把 Spec 写成实现方案）：**未发生**。三条 delta 的 MODIFIED 正文全是可观察行为——「请求路径解析其全部符号链接后得到的物理位置位于根目录的物理位置之内」「解析后指向根目录之外」；`filepath.EvalSymlinks`、`filepath.Rel`、启动时解析一次、`physicalRoot` 字段、回落分类等机制全部留在 design D2/D3 与代码注释，spec 里一个机制词都没有出现。
+- 现象二（需求变化被误做成 ADDED）：**第五次 MODIFIED 演练，也是第一次「预约的翻案」如约兑现**。被推翻的承诺（根内软链字面出根仍提供）是 Change 02 design D3 当年刻意立下、并同步预约了翻案时机的；proposal 的 Why 直接引用该预约作动机，BREAKING 变更因此有出处、有既定时机。delta 无 ADDED，6 条 MODIFIED 全部带完整 Requirement 重写；最尖锐的一处翻转发生在同一个 Scenario 标题下——`A path inside the root traverses a symbolic link outward` 的 THEN 从「按该路径提供内容」原位反转为「拒绝并返回 `outside_root`」：需求变化被表达为对同一条行为的重写，而不是新增一条行为。
+- 现象三（Apply 偷偷扩大范围）：**未发生（以提交内容为证）**。feat 提交的文件清单与 proposal Impact 逐项对应：`browse.go`（resolve 追加物理判定）、`server.go`（`physicalRoot` 字段与构造）、`app.go`（启动错误路径）、三个测试文件各一处断言反转与新增用例；`content.go` 与 `image.go` 一字未动——「端点代码零变化」不是口号，是 tasks 2 节的验收标准，由「越界判定只有一份代码」直接兑现。
+- 其他观察：
+  1. **BREAKING 的体面取决于翻案条款立得早不早。** Change 02 立字面政策的同时写下「翻案时机预约为 13 的前置」，本 Change 兑现时零争议：为什么改（13 开放远程监听后，字面判定等于向同网段开放任意文件读取）、何时改（13 之前）、改成什么强度（物理判定、无开关）都在几个 Change 之前写好了。「承诺与翻案条款同时立」值得成为写下任何 BREAKING 候选行为时的默认动作。
+  2. **反转断言而不是删除测试。** 三处宽松断言（browse / content / image 各一）全部原地反转为拒绝断言，同一 fixture 从「钉住宽松承诺」变成「钉住物理出根必拒」。spec 翻转后测试跟着翻转，覆盖不缩水；删测试则会把「这个行为曾被认为值得钉住」的痕迹一并抹掉。
+  3. **design 的汇总句也要与 delta 对账。** D7 写「共 5 条 MODIFIED」，delta 实际是 6 条（3 个 capability × 2）——proposal 与 delta 一致，只有 design 的计数句算错。sync 的字节断言全部通过之后，与 design 对账时才撞见；归档前修正（5→6），归档副本不带笔误。教训与 Change 04 观察 2 同族：错的是指针（汇总计数），不是内容（逐条描述都对）。
+  4. **sync 第五次退化成「单块整替 + 断言」**（延续 05 观察 3、07 观察 2、08 观察 3）：脚本按 `### Requirement:` 标题切块、自后向前做字节替换，三连断言——每个 delta 块在合并结果中字节一致、Requirement 总数不变、旧政策措辞（「经字面解析后」「只依据字面路径」）零残留。MODIFIED 整替场景下，智能合并没有用武之地；断言的形状（计数不变 + 旧措辞缺席）比合并算法本身更能兜底。
+  5. **未验证也要记录保障边界。** Windows 行为实证（design D6 / tasks 3.4）：**未验证**。用户确认本机不使用 Windows，机器上残留的 Win11 UTM 虚拟机已废弃多年，不作为实证环境；junction 与 8.3 短名下 `filepath.EvalSymlinks` 的实际解析行为维持「不预先假设」。如实记录的是边界而非空白：全部符号链接用例在无法创建软链的环境（含 Windows）自动 skip，不会假失败；`GOOS=windows go build ./...` 交叉编译通过（ADR-0001 不回退）；spec 只承诺「解析后物理位置在根内」，与解析器的具体行为正交，未验证不影响 spec 与方案。将来有真实 Windows 环境时，跑一条「根内 junction 指向根外 → 请求被判 `outside_root`」即可闭合此问号。
+  6. **归档时确认 Purpose 仍然为真**（Change 03 观察 6 纪律第六次执行）：`directory-browsing` 的 Purpose 写「不包含文件内容读取」，本 Change 只动越界判定基准，成立；`text-preview` 与 `image-preview` 的 Purpose 未提及判定基准，无需改动。想法池的两条符号链接 wart（条目类型、链接长度）按 design Non-Goals 的预约随状态联动复核措辞——「字面路径可提供」这半句前提已随本 Change 变假，池中条目改写为「可列出性已分裂」的新表述。

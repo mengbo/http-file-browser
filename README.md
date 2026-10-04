@@ -8,7 +8,7 @@
 
 ✅ Change 02 `directory-browsing` 已归档：浏览器中可按 Finder 风格浏览命令行指定的根目录——进入子目录、返回上级、看到当前位置，浏览位置镜像到地址栏（刷新停留在原目录、前进/后退可用、当前目录可作深链接）。列表顺序为「目录在前 + 名称不区分大小写 + 原名 tiebreak」。服务不提供根目录之外的内容。行为规范见 [openspec/specs/directory-browsing/](openspec/specs/directory-browsing/) 与 [openspec/specs/service-startup/](openspec/specs/service-startup/)。
 
-✅ Change 03 已归档：列表的每个条目除名称与类型外还给出大小与最后修改时间，三列对齐显示，大小为人类可读形式、时间为本地时区形式。符号链接的大小是链接自身的长度而非目标大小（与服务只做字面越界判定的策略一致）；目录不给出大小；单个条目元信息取不到时该行保留名称、其余留空。列表不提供文件内容。
+✅ Change 03 已归档：列表的每个条目除名称与类型外还给出大小与最后修改时间，三列对齐显示，大小为人类可读形式、时间为本地时区形式。符号链接的大小是链接自身的长度而非目标大小（元数据检测不解析链接，与按物理位置越界判定的策略一致）；目录不给出大小；单个条目元信息取不到时该行保留名称、其余留空。列表不提供文件内容。
 
 ✅ Change 04 `text-preview` 已归档：文件条目可以点开，以纯文本查看其内容，位置仍然镜像到地址栏（`/?path=docs/notes.txt` 可作深链接、刷新停在原位、前进后退在目录与文件之间可用）。行为规范见 [openspec/specs/text-preview/](openspec/specs/text-preview/)。
 
@@ -21,6 +21,8 @@
 ✅ Change 08 `improve-markdown-preview` 已归档：Markdown 文件的呈现形式可切换（「查看源码 / 查看渲染」按钮，默认渲染）——源码形式复用既有语法高亮管线呈现源码，切换只影响当前查看（离开后再次打开同一文件回到渲染形式，不写 URL/History、不可分享）；源码形式下内容字符序列与文件逐字符一致。渲染形式的既有行为（字面 HTML、相对链接导航、图片、代码块高亮、渲染失败回退素文本）全部挂上「以渲染形式呈现时」条件、行为不变。行为规范见 [openspec/specs/markdown-preview/](openspec/specs/markdown-preview/)。
 
 ✅ Change 09 `add-image-preview` 已归档：图片文件（png/jpg/jpeg/gif/webp/bmp/ico/avif）点开即以图片呈现——服务端按扩展名识别图片、经 `/api/image` 以流式字节响应提供内容（无大小上限），由浏览器解码呈现；识别只看名字、不读内容也不验魔数，装着图片字节的无扩展名或非图片扩展名文件照样拒绝（`not_an_image`）。图片无法加载时文件视图给一句中性回退说明，不留静默破图、不误报为服务错误。`/api/` 分区为图片字节开唯一的口：该端点的错误响应仍一律 JSON 信封。SVG 刻意不做，记入想法池。行为规范见 [openspec/specs/image-preview/](openspec/specs/image-preview/) 与 [openspec/specs/service-startup/](openspec/specs/service-startup/)。
+
+✅ Change 17 `improve-root-confinement` 已归档：越界判定由**字面路径**改为**物理路径**——请求路径解析其全部符号链接后，物理位置落在根目录物理位置之内才提供内容；根内经软链指向根外的路径一律拒绝（`outside_root`），无任何开关（此前「按字面路径放行出根软链」的承诺被正式翻案，为远程访问 Change 扫清安全前置）。根内软链仍可用；根目录路径自身经软链（如 macOS `/tmp` → `/private/tmp`）零回归；悬空软链维持 `not_found`。涉及 directory-browsing / text-preview / image-preview 三个 capability，行为规范见 [openspec/specs/directory-browsing/](openspec/specs/directory-browsing/)。
 
 - **判定规则是「扩展名白名单 + 无扩展名嗅探内容」**（Change 05 起）：带已知文本扩展名的文件按名字直接判定；名称没有扩展名的文件按内容起始窗口判定，窗口内的空字节若全部只落偶数位或只落奇数位（UTF-16 特征）则豁免。
 - 判定为非文本时给出「这是二进制文件，无法以文本预览」；超过 1 MiB 的文件给出「文件过大，无法以文本预览」（不静默截断）。路径是目录、越界、无权限等各有各的提示。

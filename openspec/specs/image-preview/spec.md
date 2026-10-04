@@ -17,8 +17,8 @@
 
 #### Scenario: A path inside the root traverses a symbolic link outward
 
-- **WHEN** 客户端请求的路径字面位置位于根目录之内，但经由符号链接指向根目录之外
-- **THEN** 系统按该路径提供图片内容，不将其视为越界
+- **WHEN** 客户端请求的路径字面位置位于根目录之内，但解析后指向根目录之外
+- **THEN** 系统拒绝该请求，返回机器可读错误标识为 `outside_root` 的 JSON 错误响应体，不返回该文件的图片内容
 
 #### Scenario: The position contains redundant segments
 
@@ -75,7 +75,7 @@
 
 #### Scenario: The requested path is outside the root
 
-- **WHEN** 客户端请求的路径经字面解析后落在根目录之外
+- **WHEN** 客户端请求的路径解析后落在根目录之外
 - **THEN** 系统返回机器可读错误标识为 `outside_root` 的 JSON 错误响应体
 
 #### Scenario: The requested file is not recognized as an image

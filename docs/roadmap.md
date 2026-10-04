@@ -47,7 +47,7 @@
 | 07 | `add-markdown-preview` | Markdown 渲染 | 携带 syntax-highlighting MODIFIED：渲染形式的 `.md` 整体让渡给 `markdown-preview`（条件挂呈现形式，为 08 源码视图留位） | ✅ [`2026-10-03-add-markdown-preview`](changes/archive/2026-10-03-add-markdown-preview/) |
 | 08 | `improve-markdown-preview` | 渲染/源码视图切换 | 第二次需求变更，MODIFIED 演练；兑现 07 的「条件挂呈现形式」留位，syntax-highlighting 零 delta | ✅ [`2026-10-03-improve-markdown-preview`](changes/archive/2026-10-03-improve-markdown-preview/) |
 | 09 | `add-image-preview` | 图片预览 | 携带 service-startup MODIFIED：`/api/` 分区为图片字节开口；SVG 记入想法池 | ✅ [`2026-10-04-add-image-preview`](changes/archive/2026-10-04-add-image-preview/) |
-| 17 | `improve-root-confinement` | 越界判定由字面路径改为物理路径 | 13 的前置，须先于 13 归档；执行顺位插队至 10 之前。符号链接解析后须落在解析后的根目录内，无开关；携带 directory-browsing / text-preview / image-preview 三处 MODIFIED | 🚧 |
+| 17 | `improve-root-confinement` | 越界判定由字面路径改为物理路径 | 13 的前置，须先于 13 归档；执行顺位插队至 10 之前。符号链接解析后须落在解析后的根目录内，无开关；携带 directory-browsing / text-preview / image-preview 三处 MODIFIED | ✅ [`2026-10-04-improve-root-confinement`](changes/archive/2026-10-04-improve-root-confinement/) |
 | 10 | `add-file-search` | 文件搜索 | | 💡 |
 | 11 | `add-file-editing` | 文件编辑与保存 | 先 Explore 保存语义 | 💡 |
 | 12 | `add-edit-conflict-detection` | 编辑期间检测外部修改 | | 💡 |
@@ -80,12 +80,12 @@
 
 尚未规划为 Change 的点子。立 Change 时从这里认领或新增。
 
-- **符号链接越界策略（已认领为 Change 17 `improve-root-confinement`，2026-10-04）**：策略已定——一律按物理路径判定（请求路径经符号链接解析后须落在解析后的根目录内），无开关，拒绝复用 `outside_root`；携带 directory-browsing / text-preview / image-preview 三处 MODIFIED。原悬置背景（Change 02 起字面判定、D3 翻案条款）见归档 [`changes/archive/2026-10-03-directory-browsing/design.md`](../openspec/changes/archive/2026-10-03-directory-browsing/design.md) 的 D3。
+- **符号链接越界策略（已由 Change 17 `improve-root-confinement` 兑现，2026-10-04 归档）**：最终策略——一律按物理路径判定（请求路径经符号链接解析后须落在解析后的根目录内），无开关，拒绝复用 `outside_root`；携带 directory-browsing / text-preview / image-preview 三处各 2 条 MODIFIED。原悬置背景（Change 02 起字面判定、D3 翻案条款）见归档 [`changes/archive/2026-10-03-directory-browsing/design.md`](../openspec/changes/archive/2026-10-03-directory-browsing/design.md) 的 D3，兑现记录见 Change 17 的 proposal 与归档 design。
 - **SVG 图片预览**（Change 09 探索切出的边界物，proposal Non-Goal）：SVG 是文本与图像的交界，进图片预览要同时拖三件事——`text-preview` 的文本白名单要纳入 `svg`（否则内容端点先以 `not_text` 拦下）；图片识别表与呈现形式要为「文本型图像」推广（渲染/源码两种形式是光栅图没有的）；浏览器直接打开 SVG URL 等于执行其中脚本（`<img>` 上下文不执行脚本、直接访问执行，安全面完全不同）。三件事一起独立立 Change。
 - **大目录分页**：目录列表一次性返回全部条目，十万级文件目录会产生很大响应体。若要分页会改变 `Directory listing response` 的响应形状，属新增 Requirement，需独立 Change。
 - **`parent` 空值的二义性**（design D10 记录）：根目录与根目录的一级子目录，其 `parent` 都是空字符串，客户端必须靠 `path` 判断是否在根目录。当前刻意不为它引入 `null` 第二种表示；若 Change 03 的面包屑或后续 Change 发现按 `parent` 推断根目录更方便，再用 MODIFIED `Parent directory reference` 把根目录的 `parent` 正式化为 `null` 或缺省。
-- **符号链接的条目类型**（design D12 记录）：指向目录的符号链接目前显示为 `file` 且不可点击，但按其字面路径请求能列出目标内容——「字面路径可提供」与「字面报告为文件」是同一个 D3 决策的两面。等有 Change 要展示「种类」时一并决定是否把符号链接作为第三类条目，届时 MODIFIED `Entry type distinction`。
-- **符号链接的大小是链接自身的长度**（Change 03 / design D4 延伸）：指向一个 100KB 文件的软链在列表里显示几十字节（目标路径字符串的字节数）。这是 D12 已知 wart 的延伸，不是新问题：分类跟随链接会与纯字面的越界判定不对称，所以取数必须走 lstat（`DirEntry.Info`）。spec 已如实承诺（Scenario `An entry is a symbolic link`）而不是留给实现自行解释。要彻底修需要引入 `symlink` 第三类条目类型，属独立决定，与上一条一起认领。
+- **符号链接的条目类型**（Change 02 design D12 记录，Change 17 归档时复核）：指向目录的符号链接目前显示为 `file` 且不可点击（lstat 语义，Change 17 Non-Goal）。其可列出性已随 Change 17 分裂：指向根内另一位置的目标仍可经请求列出，指向根外的目标被物理判定拒绝（`outside_root`）。「报告为文件」的 lstat 语义与「能否列出」的物理判定自此是两个独立决定。等有 Change 要展示「种类」时一并决定是否把符号链接作为第三类条目，届时 MODIFIED `Entry type distinction`。
+- **符号链接的大小是链接自身的长度**（Change 03 / design D4 延伸，Change 17 归档时复核）：指向一个 100KB 文件的软链在列表里显示几十字节（目标路径字符串的字节数）。这是 D12 已知 wart 的延伸，不是新问题：取数必须走 lstat（`DirEntry.Info`）——检测不是解析，若走 Stat，根内指向外部的软链会报出根外目标的真实大小，而同一响应的越界判定（Change 17 起按物理位置）已声明它不可达。spec 已如实承诺（Scenario `An entry is a symbolic link`）而不是留给实现自行解释。要彻底修需要引入 `symlink` 第三类条目类型，属独立决定，与上一条一起认领。
 - **错误态缺少返回上级入口**：目录访问失败时前端清空条目并隐藏上级入口，用户只能靠浏览器后退离开。属纯呈现层（design Open Questions 已声明 spec 未约束错误态呈现），未在本 Change 处理；若实测中确实碍事，可在后续 Change 的前端润色里补上客户端自行推导的上级入口。
 - **Change 05 的内容嗅探方案已定（已由 Change 05 兑现）**（方案出处为 Change 04 探索时的调查）：判据用 WHATWG MIME Sniffing 的 "binary data byte"（`0x00–0x08` / `0x0B` / `0x0E–0x1A` / `0x1C–0x1F`），手写约十二行循环，**不引入** `net/http.DetectContentType`（它的签名表会把 spec 判据拖成「MIME 类型以 text/ 开头」）、不引入 libmagic（7.3 MB 魔数库 + cgo，与 ADR-0001 的交叉编译价值冲突）、不引入 `h2non/filetype`（实测它完全不做文本判定）、不引入 `x/net/html/charset`（+497 KB / 20 个包，且永不返回 GBK 等 CJK 编码）。建议窗口 4096 字节而非 Go 的 512（规范写 1445；实测 NUL 落在偏移 512 之后的 PNG 会被判成文本）。已知误判：无 BOM 的 UTF-16，每个偶数位一个 NUL——**而这正是 Change 05 除内容嗅探外还要一并修的那一刀**。完整论证见归档 `openspec/changes/archive/2026-10-03-text-preview/design.md` 的 D7。
 - **遗留中文编码按 UTF-8 处理，中文文件会乱码**（Change 04 / design D9 的自觉取舍）：WHATWG 的编码机制结构性地只会给出 `utf-8` / `utf-16be` / `utf-16le` / `windows-1252`，**永远不返回 GBK / Shift_JIS / Big5**；真正的 CJK 检测是统计性的（uchardet、ICU），没有零依赖的 Go 等价物。理由是「不检测比检测错更诚实」——一个自信宣称「这是 GBK」却猜错的实现比明摆着的乱码更难排查。等真有用户抱怨时立独立 Change。

@@ -137,7 +137,7 @@
 
 ### Requirement: Root directory confinement
 
-系统 SHALL NOT 提供根目录之外的内容。系统 SHALL 在请求路径按字面解析后落在根目录之外时拒绝该请求，并返回 JSON 错误响应。系统 SHALL 在判断越界时只依据字面路径：请求路径的字面位置位于根目录之内时，系统 SHALL 按该路径提供内容，即使该路径经由符号链接指向根目录之外。
+系统 SHALL NOT 提供根目录之外的内容。系统 SHALL 按物理位置判断越界：请求路径解析其全部符号链接后得到的物理位置位于根目录的物理位置之内时，系统 SHALL 按该路径提供内容；位于根目录的物理位置之外时，系统 SHALL 拒绝该请求，并返回 JSON 错误响应。根目录的物理位置指根目录路径解析其全部符号链接后得到的位置。
 
 #### Scenario: A path escapes the root by parent references
 
@@ -151,7 +151,17 @@
 
 #### Scenario: A path inside the root traverses a symbolic link outward
 
-- **WHEN** 客户端请求的路径字面位置位于根目录之内，但经由符号链接指向根目录之外
+- **WHEN** 客户端请求的路径字面位置位于根目录之内，但解析后指向根目录之外
+- **THEN** 系统拒绝该请求，返回指示越界的 JSON 错误响应，不返回该路径的内容
+
+#### Scenario: A path traverses a symbolic link to another location inside the root
+
+- **WHEN** 客户端请求的路径经由符号链接指向根目录内的另一个位置
+- **THEN** 系统按该路径提供内容，不将其视为越界
+
+#### Scenario: The root path itself contains a symbolic link
+
+- **WHEN** 指定的根目录路径经由符号链接指向其物理位置，且客户端请求的路径解析后位于该物理位置之内
 - **THEN** 系统按该路径提供内容，不将其视为越界
 
 ### Requirement: Directory access failures
@@ -175,5 +185,5 @@
 
 #### Scenario: The requested path is outside the root
 
-- **WHEN** 客户端请求的路径经字面解析后落在根目录之外
+- **WHEN** 客户端请求的路径解析后落在根目录之外
 - **THEN** 系统返回机器可读错误标识为 `outside_root` 的 JSON 错误响应体
