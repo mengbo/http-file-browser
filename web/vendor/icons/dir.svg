@@ -1,0 +1,22 @@
+<!-- Vendored 第三方图标：Lucide v1.51.0 的 folder.svg（ISC License，线条几何风格）。
+   来源：https://unpkg.com/lucide-static@1.51.0/icons/folder.svg
+   获取时间：2026-10-04
+   vendored 文件没有 lock 文件，本注释就是版本记录；升级 = 换文件 + 改本注释（design D2）。
+   stroke="currentColor" 由 Lucide 默认提供，深浅外观切换走 CSS color；视图框 24×24，
+   CSS 渲染 16×16 靠 SVG 自带缩放。
+   下方为官方构建产物原文，仅此注释为本地新增。 -->
+<!-- @license lucide-static v1.51.0 - ISC -->
+<svg
+  class="lucide lucide-folder"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
+</svg>

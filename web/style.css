@@ -11,9 +11,9 @@
 body {
   margin: 0;
   min-height: 100vh;
-  font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", "PingFang SC", sans-serif;
-  background: #f5f5f7;
-  color: #1d1d1f;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", "Helvetica Neue", "PingFang SC", sans-serif;
+  background: #ffffff;
+  color: #1f2328;
 }
 
 .browser {
@@ -24,7 +24,7 @@ body {
 
 .toolbar {
   padding-bottom: 0.75rem;
-  border-bottom: 1px solid #d8d8dc;
+  border-bottom: 1px solid #d0d7de;
 }
 
 .title {
@@ -36,16 +36,16 @@ body {
 .location {
   margin: 0;
   font-size: 0.85rem;
-  color: #6e6e73;
+  color: #656d76;
   overflow-wrap: anywhere;
 }
 
 .error {
   margin: 1rem 0 0;
   padding: 0.6rem 0.75rem;
-  border-radius: 8px;
-  background: #fdecea;
-  color: #b3261e;
+  border-radius: 6px;
+  background: #ffebe9;
+  color: #cf222e;
   font-size: 0.9rem;
   overflow-wrap: anywhere;
 }
@@ -57,7 +57,7 @@ body {
 .parent-link {
   display: inline-block;
   padding: 0.3rem 0;
-  color: #0b62d0;
+  color: #0969da;
   font-size: 0.9rem;
   text-decoration: none;
 }
@@ -74,11 +74,16 @@ body {
 
 /* 表头与条目行用同一套列宽，靠 grid 而不是靠空白对齐（design D8）。
    名称列 minmax(0, 1fr) 而不是 1fr：后者的最小尺寸是内容宽度，
-   长文件名会把整个布局撑宽——overflow-wrap 只能换行，撑宽它管不了。 */
+   长文件名会把整个布局撑宽——overflow-wrap 只能换行，撑宽它管不了。
+   首列 auto 留给类型化视觉图标（polish-file-browser design D6）：
+   图标列宽度由内容自动决定（图标固定 16px + margin 0.4rem），
+   名称列继续吃 1fr 吸收长文件名；首列若不存在则图标跳到第 1 列即「名称列」，
+   既存测试 3 列的纪律由 4 列对齐保持（列数变化、视觉语义不变）。
+   此处变更经设计评审授权：原 3 列纪律的「名称/大小/时间」对应到新 4 列的「图标/名称/大小/时间」。 */
 .entries-header,
 .entry {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 5.5rem 10rem;
+  grid-template-columns: auto minmax(0, 1fr) 5.5rem 10rem;
   column-gap: 0.75rem;
   align-items: baseline;
 }
@@ -86,15 +91,16 @@ body {
 .entries-header {
   padding: 0 0.5rem 0.25rem;
   font-size: 0.75rem;
-  color: #6e6e73;
-  border-bottom: 1px solid #d8d8dc;
+  color: #656d76;
+  border-bottom: 1px solid #d0d7de;
 }
 
 .entry {
-  padding: 0.4rem 0.5rem;
+  padding: 0.55rem 0.5rem;
   border-radius: 6px;
-  border-bottom: 1px solid #ebebef;
+  border-bottom: 1px solid #d8dee4;
   font-size: 0.95rem;
+  line-height: 1.55;
   overflow-wrap: anywhere;
 }
 
@@ -105,10 +111,23 @@ body {
   min-width: 0;
 }
 
+/* 类型化视觉图标（polish-file-browser design D3/D4）：首列自动宽度由图标 + margin 决定，
+   图标尺寸 16×16 与正文字号齐平；vertical-align: middle 对齐 Lucide 视图框中心与文字
+   x-height（中线附近）；flex-shrink: 0 防窄屏 grid 收缩。color 走 currentColor
+   （vendored SVG 自带 stroke="currentColor"，1.1），深浅外观切换见下方媒体查询。 */
+.entry-icon {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+  vertical-align: middle;
+  margin-right: 0.4rem;
+  color: #656d76;
+}
+
 .entry-size,
 .entry-time {
   font-size: 0.8rem;
-  color: #6e6e73;
+  color: #656d76;
   font-variant-numeric: tabular-nums;
 }
 
@@ -123,12 +142,17 @@ body {
    两个类分开，样式就不用靠标签名去猜哪个条目是目录。 */
 .entry-link {
   display: block;
-  color: #0b62d0;
+  color: #0969da;
   text-decoration: none;
 }
 
+.entry-link:hover {
+  text-decoration: underline;
+}
+
+/* GitHub 风格（design D5 定稿）：hover 只给背景，不给阴影——安静的列表，不抢内容的戏。 */
 .entry:has(.entry-link):hover {
-  background: #eceef2;
+  background: #f6f8fa;
 }
 
 /* 文件视图的内容区。长行横向滚动而不换行：代码换行会读不出缩进关系；
@@ -142,8 +166,8 @@ body {
   padding: 0.75rem;
   max-width: 100%;
   overflow-x: auto;
-  border: 1px solid #d8d8dc;
-  border-radius: 8px;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
   background: #ffffff;
   color: #24292e;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -158,29 +182,29 @@ body {
 .form-toggle {
   margin: 0.5rem 0 0;
   padding: 0.3rem 0.75rem;
-  border: 1px solid #d8d8dc;
+  border: 1px solid #d0d7de;
   border-radius: 6px;
-  background: #ffffff;
-  color: #0b62d0;
+  background: #f6f8fa;
+  color: #24292f;
   font-size: 0.85rem;
   cursor: pointer;
 }
 
 .form-toggle:hover {
-  border-color: #0b62d0;
+  background: #eef1f4;
 }
 
 /* ============ 图片视图（image-preview）============ */
 
-/* 与 .preview 同一纸面语言：白底、圆角、细边框。display: block + 水平 auto 边距让图片
-   在文件视图内居中；max-width: 100% 防超宽图片撑破布局（同 .preview 的既有取舍），
-   高度按比例收缩，320px 窄视口下不产生横向滚动。 */
+/* 浅色下与 .preview 同一纸面语言（白底、圆角、细边框），深色下随外观换成 canvas-subtle。
+   display: block + 水平 auto 边距让图片在文件视图内居中；max-width: 100% 防超宽图片撑破布局
+   （同 .preview 的既有取舍），高度按比例收缩，320px 窄视口下不产生横向滚动。 */
 .image-view {
   display: block;
   margin: 0.5rem auto 0;
   max-width: 100%;
-  border: 1px solid #d8d8dc;
-  border-radius: 8px;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
   background: #ffffff;
 }
 
@@ -202,23 +226,23 @@ body {
 .image-fallback {
   margin: 0.5rem 0 0;
   padding: 0.75rem;
-  border: 1px dashed #d8d8dc;
-  border-radius: 8px;
-  color: #6e6e73;
+  border: 1px dashed #d0d7de;
+  border-radius: 6px;
+  color: #656d76;
   font-size: 0.9rem;
   overflow-wrap: anywhere;
 }
 
 .empty {
   margin: 1.25rem 0 0;
-  color: #6e6e73;
+  color: #656d76;
   font-size: 0.9rem;
 }
 
 /* ============ 搜索（add-file-search）============ */
 
 /* 搜索框：header 内的工具件，占位说明表达作用域（当前目录子树）。
-   box-sizing 让 100% 宽度把边框算进去，不撑破 toolbar。 */
+   box-sizing 让 100% 宽度把边框算进去，不撑破 toolbar。GitHub 搜索框用 canvas-subtle 底。 */
 .search-form {
   margin: 0.5rem 0 0;
 }
@@ -227,17 +251,19 @@ body {
   box-sizing: border-box;
   width: 100%;
   padding: 0.4rem 0.6rem;
-  border: 1px solid #d8d8dc;
+  border: 1px solid #d0d7de;
   border-radius: 6px;
-  background: #ffffff;
+  background: #f6f8fa;
   color: inherit;
   font: inherit;
   font-size: 0.9rem;
 }
 
+/* focus 走 GitHub 强调蓝 + 3px 浅蓝光圈（design D5 定稿）。 */
 .search-input:focus {
-  border-color: #0b62d0;
+  border-color: #0969da;
   outline: none;
+  box-shadow: 0 0 0 3px rgba(9, 105, 218, 0.3);
 }
 
 /* 结果视图：名称 / 所在目录 / 类型三列，与列表条目同一套 grid 语言（design D9）。
@@ -253,15 +279,16 @@ body {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 3.5rem;
   column-gap: 0.75rem;
   align-items: baseline;
-  padding: 0.4rem 0.5rem;
+  padding: 0.55rem 0.5rem;
   border-radius: 6px;
-  border-bottom: 1px solid #ebebef;
+  border-bottom: 1px solid #d8dee4;
   font-size: 0.95rem;
+  line-height: 1.55;
   overflow-wrap: anywhere;
 }
 
 .match:has(.entry-link):hover {
-  background: #eceef2;
+  background: #f6f8fa;
 }
 
 .match-name,
@@ -274,7 +301,7 @@ body {
 .match-dir,
 .match-type {
   font-size: 0.8rem;
-  color: #6e6e73;
+  color: #656d76;
 }
 
 .match-type {
@@ -285,9 +312,10 @@ body {
 
 /* 渲染视图是文档流：基类 .preview 的 white-space: pre 与等宽字体是素文本/高亮路径的，
    这里覆盖掉，块级元素自行排版。底色维持纸面白底不随外观切换（同 .preview 的既有取舍），
-   与 vendored github 浅色主题、渲染内代码块共用同一张纸，两种外观下不跳变。 */
+   与 vendored github 浅色主题、渲染内代码块共用同一张纸，两种外观下不跳变。
+   纸面内所有元素一律用 GitHub 浅色值（不随外观切换），否则深色下白纸上的元素会消失。 */
 .preview.markdown {
-  font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", "PingFang SC", sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", "Helvetica Neue", "PingFang SC", sans-serif;
   font-size: 0.95rem;
   line-height: 1.6;
   white-space: normal;
@@ -317,13 +345,13 @@ body {
 .preview.markdown h1 {
   font-size: 1.5em;
   padding-bottom: 0.3em;
-  border-bottom: 1px solid #ebebef;
+  border-bottom: 1px solid #d0d7de;
 }
 
 .preview.markdown h2 {
   font-size: 1.25em;
   padding-bottom: 0.25em;
-  border-bottom: 1px solid #ebebef;
+  border-bottom: 1px solid #d0d7de;
 }
 
 .preview.markdown h3 {
@@ -360,8 +388,8 @@ body {
 .preview.markdown blockquote {
   margin: 0.75em 0;
   padding: 0.25em 1em;
-  border-left: 3px solid #d8d8dc;
-  color: #6e6e73;
+  border-left: 3px solid #d0d7de;
+  color: #656d76;
 }
 
 /* 渲染内代码块：同一张纸上的等宽小字，横向滚动不撑破布局。
@@ -369,7 +397,7 @@ body {
 .preview.markdown pre {
   margin: 0.75em 0;
   padding: 0.75rem;
-  border: 1px solid #d8d8dc;
+  border: 1px solid #d0d7de;
   border-radius: 6px;
   background: #ffffff;
   overflow-x: auto;
@@ -384,7 +412,7 @@ body {
 .preview.markdown code {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.85em;
-  background: #f0f0f2;
+  background: #eff1f3;
   border-radius: 4px;
   padding: 0.1em 0.35em;
 }
@@ -407,13 +435,13 @@ body {
 
 .preview.markdown th,
 .preview.markdown td {
-  border: 1px solid #d8d8dc;
+  border: 1px solid #d0d7de;
   padding: 0.35em 0.75em;
   text-align: left;
 }
 
 .preview.markdown th {
-  background: #f5f5f7;
+  background: #f6f8fa;
   font-weight: 600;
 }
 
@@ -421,16 +449,18 @@ body {
 .preview.markdown hr {
   margin: 1.5em 0;
   border: none;
-  border-top: 1px solid #d8d8dc;
+  border-top: 1px solid #d0d7de;
 }
 
 .preview.markdown img {
   max-width: 100%;
 }
 
-/* 渲染视图内的链接与目录条目同一套可点外观；外部链接新标签打开（design D4）。 */
+/* 渲染视图内的链接用 GitHub 强调蓝，hover 才出下划线（GitHub 正文链接惯例）；
+   外部链接新标签打开（design D4）。纸面永远白，故只设浅色值、不要深色覆盖。 */
 .preview.markdown a {
-  color: #0b62d0;
+  color: #0969da;
+  text-decoration: none;
 }
 
 .preview.markdown a:hover {
@@ -447,7 +477,7 @@ body {
 
   .entries-header,
   .entry {
-    grid-template-columns: minmax(0, 1fr) 4.25rem 8.25rem;
+    grid-template-columns: auto minmax(0, 1fr) 4.25rem 8.25rem;
     column-gap: 0.5rem;
   }
 
@@ -465,13 +495,13 @@ body {
 
 @media (prefers-color-scheme: dark) {
   body {
-    background: #1c1c1e;
-    color: #f5f5f7;
+    background: #0d1117;
+    color: #e6edf3;
   }
 
   .toolbar,
   .entries-header {
-    border-bottom-color: #3a3a3c;
+    border-bottom-color: #30363d;
   }
 
   .location,
@@ -479,66 +509,73 @@ body {
   .entries-header,
   .entry-size,
   .entry-time {
-    color: #98989d;
+    color: #8b949e;
+  }
+
+  /* 类型化视觉图标深色配色（polish-file-browser design D4 定稿）：GitHub 弱化灰
+     #8b949e on #0d1117，对比度 ≈ 6.15:1（WCAG AA）。 */
+  .entry-icon {
+    color: #8b949e;
   }
 
   .error {
-    background: #3a1f1c;
-    color: #ff6961;
+    background: #3c1618;
+    color: #ff7b72;
   }
 
   .parent-link,
   .entry-link {
-    color: #64a8ff;
+    color: #4493f8;
   }
 
   .form-toggle {
-    background: #2c2c2e;
-    border-color: #3a3a3c;
-    color: #64a8ff;
+    background: #21262d;
+    border-color: #30363d;
+    color: #e6edf3;
   }
 
   .form-toggle:hover {
-    border-color: #64a8ff;
+    background: #30363d;
   }
 
   .search-input {
-    background: #2c2c2e;
-    border-color: #3a3a3c;
+    background: #161b22;
+    border-color: #30363d;
   }
 
   .search-input:focus {
-    border-color: #64a8ff;
+    border-color: #4493f8;
+    box-shadow: 0 0 0 3px rgba(56, 139, 253, 0.4);
   }
 
   .match-dir,
   .match-type {
-    color: #98989d;
+    color: #8b949e;
   }
 
   .image-view {
-    border-color: #3a3a3c;
-    background: #2c2c2e;
+    border-color: #30363d;
+    background: #21262d;
   }
 
   .image-fallback {
-    border-color: #3a3a3c;
-    color: #98989d;
+    border-color: #30363d;
+    color: #8b949e;
   }
 
   .entry {
-    border-bottom-color: #2c2c2e;
+    border-bottom-color: #21262d;
   }
 
   .entry:has(.entry-link):hover {
-    background: #2c2c2e;
+    background: #161b22;
   }
 
   .match {
-    border-bottom-color: #2c2c2e;
+    border-bottom-color: #21262d;
   }
 
   .match:has(.entry-link):hover {
-    background: #2c2c2e;
+    background: #161b22;
   }
 }

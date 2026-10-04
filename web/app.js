@@ -96,6 +96,16 @@
       var item = document.createElement("li");
       item.className = "entry";
 
+      // 类型化视觉图标（polish-file-browser design D2/D6）：目录条目与文件条目以
+      // 不同的视觉图标呈现，src 由 entry.type 决定。装饰元素（alt="" + aria-hidden），
+      // 屏幕阅读器跳过；信息承载在 .entry-link 的文本上（spec: 类型化视觉图标）。
+      var icon = document.createElement("img");
+      icon.className = "entry-icon";
+      icon.setAttribute("src", entry.type === "directory" ? "/vendor/icons/dir.svg" : "/vendor/icons/file.svg");
+      icon.setAttribute("alt", "");
+      icon.setAttribute("aria-hidden", "true");
+      item.appendChild(icon);
+
       // 目录与文件一律是链接：是否可读文本由服务端判定（design D5、D8）。
       // 前端不给「可否预览」加一条分支，那份清单与服务端的清单必然漂移；
       // 点开非文本文件时服务端回 not_text，界面据此给一句解释。
