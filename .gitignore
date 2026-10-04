@@ -6,3 +6,6 @@
 
 # skills 工具链生成的本地锁文件
 skills-lock.json
+
+# 本地测试环境（Go 惯例的 fixture 目录，go 工具链也会忽略它；testdata/generate.py 可随时重建，不进版本控制）
+/testdata/

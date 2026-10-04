@@ -24,6 +24,14 @@
 - 已归档 Change 的行为要变化：创建新 Change，用 MODIFIED / ADDED / REMOVED / RENAMED 表达；不修改历史归档。
 - Requirement 只写可观察行为；实现细节进该 Change 的 design.md，长期架构决策进 ADR。
 
+## 测试环境
+
+- `testdata/` 是本地手工测试环境：图片（png/jpg/gif/bmp）、Markdown 相对链接与内嵌图片、语法高亮样例、根内/出根/悬空软链、超限与二进制等边界用例。不进版本控制（`.gitignore`）。
+- 命名取 Go 惯例：`testdata/` 是测试 fixture 的标准去处，且 go 工具链完全忽略该目录（构建、测试、vet 都不下钻），目录里的软链与怪文件名天然与工具链隔离。
+- 启动：仓库根执行 `go run . testdata`；重建：`python3 testdata/generate.py`。
+- tasks 中的浏览器走查、端到端冒烟类验证可用它作根目录；各用例的预期行为见 `testdata/README.md`。
+- 调整环境内容属测试基建，不是用户可感知行为变化，不需要 OpenSpec Change。
+
 ## 文档写入规则
 
 | 要写的内容 | 写到哪 |
