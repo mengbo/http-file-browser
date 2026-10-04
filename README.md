@@ -68,11 +68,20 @@ go build -o http-file-browser .
 
 ## 文档
 
+按职责分四类：
+
+- **规范与历史（OpenSpec 管）**：`openspec/specs/` 是系统当前行为的唯一事实来源；`openspec/changes/` 是进行中的变化，完成后进 `archive/`。
+- **长期需求与决策**：`docs/roadmap.md` 管长期规划（含还没成为 Change 的**想法池**）；`docs/adr/` 管跨变更的长期架构决策。
+- **实验记录**：`docs/journal.md` 记录每个 Change 实际发生了什么。
+- **方法参考**：最初计划、走完后的复盘、速查表。
+
 | 位置 | 内容 |
 |---|---|
-| [docs/roadmap.md](docs/roadmap.md) | 长期规划与 Change 地图（活文档） |
-| [docs/journal.md](docs/journal.md) | SDD 学习实验观察记录 |
-| [docs/adr/](docs/adr/) | 架构决策记录（ADR） |
-| [docs/OpenSpec_HTTP_File_Browser.md](docs/OpenSpec_HTTP_File_Browser.md) | OpenSpec 实战教材（静态参考） |
-| [openspec/specs/](openspec/specs/) | 系统当前行为规范 |
-| [openspec/changes/archive/](openspec/changes/archive/) | 系统演进史（Change 归档） |
+| [openspec/specs/](openspec/specs/) | 系统当前行为规范：每个能力一份，「现在是什么」的唯一事实来源 |
+| [openspec/changes/archive/](openspec/changes/archive/) | 系统演进史：每个 Change 的提案/规格/设计/任务原样归档，「怎么变成现在这样」 |
+| [docs/roadmap.md](docs/roadmap.md) | 长期需求管理（活文档）：愿景、长期约束、Change 地图、能力地图、想法池 |
+| [docs/adr/](docs/adr/) | 架构决策记录：跨变更的长期决策为什么这么选 |
+| [docs/journal.md](docs/journal.md) | SDD 学习实验观察：每完成一个 Change 记录实际观察 |
+| [docs/OpenSpec_HTTP_File_Browser.md](docs/OpenSpec_HTTP_File_Browser.md) | **项目最初计划**：与 ChatGPT 讨论后成文，静态参考，不随开发更新 |
+| [docs/OpenSpec_Retrospective.md](docs/OpenSpec_Retrospective.md) | 走完后的复盘：把全过程提炼成方法手册 |
+| [docs/OpenSpec_Cheatsheet.md](docs/OpenSpec_Cheatsheet.md) | OpenSpec 命令 / 术语 / 决策速查 |
