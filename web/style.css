@@ -215,6 +215,72 @@ body {
   font-size: 0.9rem;
 }
 
+/* ============ 搜索（add-file-search）============ */
+
+/* 搜索框：header 内的工具件，占位说明表达作用域（当前目录子树）。
+   box-sizing 让 100% 宽度把边框算进去，不撑破 toolbar。 */
+.search-form {
+  margin: 0.5rem 0 0;
+}
+
+.search-input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid #d8d8dc;
+  border-radius: 6px;
+  background: #ffffff;
+  color: inherit;
+  font: inherit;
+  font-size: 0.9rem;
+}
+
+.search-input:focus {
+  border-color: #0b62d0;
+  outline: none;
+}
+
+/* 结果视图：名称 / 所在目录 / 类型三列，与列表条目同一套 grid 语言（design D9）。
+   所在目录列也是 minmax(0, 1fr)：深层命中目录路径长，同样只换行不撑宽。 */
+.matches {
+  margin: 0.5rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.match {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 3.5rem;
+  column-gap: 0.75rem;
+  align-items: baseline;
+  padding: 0.4rem 0.5rem;
+  border-radius: 6px;
+  border-bottom: 1px solid #ebebef;
+  font-size: 0.95rem;
+  overflow-wrap: anywhere;
+}
+
+.match:has(.entry-link):hover {
+  background: #eceef2;
+}
+
+.match-name,
+.match-dir {
+  min-width: 0;
+}
+
+/* 所在目录与类型是辅助信息：小一号的弱化色，同 entry-size/entry-time 的层次。
+   所在目录可读方向从左到右，不右对齐；类型独占末列右对齐便于竖着扫。 */
+.match-dir,
+.match-type {
+  font-size: 0.8rem;
+  color: #6e6e73;
+}
+
+.match-type {
+  text-align: right;
+}
+
 /* ============ Markdown 渲染排版（markdown-preview）============ */
 
 /* 渲染视图是文档流：基类 .preview 的 white-space: pre 与等宽字体是素文本/高亮路径的，
@@ -390,6 +456,11 @@ body {
   .entries-header {
     font-size: 0.7rem;
   }
+
+  .match {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 3rem;
+    column-gap: 0.5rem;
+  }
 }
 
 @media (prefers-color-scheme: dark) {
@@ -431,6 +502,20 @@ body {
     border-color: #64a8ff;
   }
 
+  .search-input {
+    background: #2c2c2e;
+    border-color: #3a3a3c;
+  }
+
+  .search-input:focus {
+    border-color: #64a8ff;
+  }
+
+  .match-dir,
+  .match-type {
+    color: #98989d;
+  }
+
   .image-view {
     border-color: #3a3a3c;
     background: #2c2c2e;
@@ -446,6 +531,14 @@ body {
   }
 
   .entry:has(.entry-link):hover {
+    background: #2c2c2e;
+  }
+
+  .match {
+    border-bottom-color: #2c2c2e;
+  }
+
+  .match:has(.entry-link):hover {
     background: #2c2c2e;
   }
 }

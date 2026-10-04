@@ -48,7 +48,7 @@
 | 08 | `improve-markdown-preview` | 渲染/源码视图切换 | 第二次需求变更，MODIFIED 演练；兑现 07 的「条件挂呈现形式」留位，syntax-highlighting 零 delta | ✅ [`2026-10-03-improve-markdown-preview`](changes/archive/2026-10-03-improve-markdown-preview/) |
 | 09 | `add-image-preview` | 图片预览 | 携带 service-startup MODIFIED：`/api/` 分区为图片字节开口；SVG 记入想法池 | ✅ [`2026-10-04-add-image-preview`](changes/archive/2026-10-04-add-image-preview/) |
 | 17 | `improve-root-confinement` | 越界判定由字面路径改为物理路径 | 13 的前置，须先于 13 归档；执行顺位插队至 10 之前。符号链接解析后须落在解析后的根目录内，无开关；携带 directory-browsing / text-preview / image-preview 三处 MODIFIED | ✅ [`2026-10-04-improve-root-confinement`](changes/archive/2026-10-04-improve-root-confinement/) |
-| 10 | `add-file-search` | 文件搜索 | | 💡 |
+| 10 | `add-file-search` | 文件搜索 | 文件名递归搜索（子串、大小写不敏感）；内容搜索切出到想法池 | 🚧 |
 | 11 | `add-file-editing` | 文件编辑与保存 | 先 Explore 保存语义 | 💡 |
 | 12 | `add-edit-conflict-detection` | 编辑期间检测外部修改 | | 💡 |
 | 13 | `add-remote-access` | 监听地址 | 先 Explore；前置：17 | 💡 |
@@ -71,6 +71,7 @@
 - `directory-browsing / Entry metadata`（Change 03）：在上述列表契约之上追加条目的大小与最后修改时间，取值规则由 `Entry metadata` 承诺。**不包含**文件内容读取——那道门仍由 `Directory listing response` 的「SHALL NOT 在列表中提供条目的内容」守住，留给 `text-preview` 有意识地推翻。
 - `text-preview`（Change 04）：从目录列表进入文本文件并查看其内容——内容响应形状、查看位置的表示与重现、读取失败的机器可读错误标识。**判定只用扩展名白名单**（明知不完整），内容嗅探属于 Change 05。`directory-browsing` 零 delta——那道门没有被推翻，内容走独立端点。
 - `text-preview` 判定放宽（Change 05）：第一次 MODIFIED 演练。判定改为两级——扩展名在白名单内照旧按名字判定；**名称没有扩展名的文件按内容起始 4096 字节判定**（WHATWG binary data byte 判据 + 空字节奇偶对齐豁免，救回无 BOM 的 UTF-16）。白名单顺带补充 `mod`/`sum`/`work`。带扩展名但不在白名单的文件**不嗅探内容**，`logo.png` 装纯文本仍拒绝（Change 04 已接受的取舍不推翻）。`directory-browsing`、`service-startup` 零 delta。
+- `search`（Change 10）：在基准位置子树内按文件名递归定位条目——`/api/search` 端点与 `path`/`q` 参数缺省约定、名称匹配语义（子串 + 大小写折叠 + 空查询匹配一切）、命中条目瘦形状（`name`/`type`/`path`，相对根目录完整路径）、结果顺序（树序 + 与列表一致 + 重复可复现）、越界判定复用 `resolve` 的字面+物理两层 + `classify` 错误词汇（零新错误码）、遍历边界（符号链接不跟进、悬空软链可命中不失败、无权限子目录跳过其余照常）、前端搜索视图与 URL 重现（`/?path=<base>&q=<query>`、前进后退在列表与结果视图间切换）。现有六个 capability 零 delta。
 
 ## MVP 明确不做
 
@@ -82,6 +83,7 @@
 
 - **符号链接越界策略（已由 Change 17 `improve-root-confinement` 兑现，2026-10-04 归档）**：最终策略——一律按物理路径判定（请求路径经符号链接解析后须落在解析后的根目录内），无开关，拒绝复用 `outside_root`；携带 directory-browsing / text-preview / image-preview 三处各 2 条 MODIFIED。原悬置背景（Change 02 起字面判定、D3 翻案条款）见归档 [`changes/archive/2026-10-03-directory-browsing/design.md`](../openspec/changes/archive/2026-10-03-directory-browsing/design.md) 的 D3，兑现记录见 Change 17 的 proposal 与归档 design。
 - **SVG 图片预览**（Change 09 探索切出的边界物，proposal Non-Goal）：SVG 是文本与图像的交界，进图片预览要同时拖三件事——`text-preview` 的文本白名单要纳入 `svg`（否则内容端点先以 `not_text` 拦下）；图片识别表与呈现形式要为「文本型图像」推广（渲染/源码两种形式是光栅图没有的）；浏览器直接打开 SVG URL 等于执行其中脚本（`<img>` 上下文不执行脚本、直接访问执行，安全面完全不同）。三件事一起独立立 Change。
+- **内容搜索**（Change 10 探索切出的边界物，proposal Non-Goal）：按文件内容递归搜索关键词，另一个量级的能力。前提是文件名搜索（Change 10）已落地；要一并想清楚的还有——复用 Change 05 的内容嗅探管道、大文件与二进制的跳过策略、编码现实（想法池「遗留中文编码按 UTF-8 处理」的乱码问题在这里会放大）、无索引实时遍历的性能边界。值得独立 Change。
 - **大目录分页**：目录列表一次性返回全部条目，十万级文件目录会产生很大响应体。若要分页会改变 `Directory listing response` 的响应形状，属新增 Requirement，需独立 Change。
 - **`parent` 空值的二义性**（design D10 记录）：根目录与根目录的一级子目录，其 `parent` 都是空字符串，客户端必须靠 `path` 判断是否在根目录。当前刻意不为它引入 `null` 第二种表示；若 Change 03 的面包屑或后续 Change 发现按 `parent` 推断根目录更方便，再用 MODIFIED `Parent directory reference` 把根目录的 `parent` 正式化为 `null` 或缺省。
 - **符号链接的条目类型**（Change 02 design D12 记录，Change 17 归档时复核）：指向目录的符号链接目前显示为 `file` 且不可点击（lstat 语义，Change 17 Non-Goal）。其可列出性已随 Change 17 分裂：指向根内另一位置的目标仍可经请求列出，指向根外的目标被物理判定拒绝（`outside_root`）。「报告为文件」的 lstat 语义与「能否列出」的物理判定自此是两个独立决定。等有 Change 要展示「种类」时一并决定是否把符号链接作为第三类条目，届时 MODIFIED `Entry type distinction`。

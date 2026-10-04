@@ -7,6 +7,10 @@
   var entriesEl = document.getElementById("entries");
   var entriesHeaderEl = document.getElementById("entries-header");
   var emptyEl = document.getElementById("empty");
+  var matchesEl = document.getElementById("matches");
+  var noMatchesEl = document.getElementById("no-matches");
+  var searchFormEl = document.getElementById("search-form");
+  var searchInputEl = document.getElementById("search-input");
   var previewEl = document.getElementById("preview");
   var imageViewEl = document.getElementById("image-view");
   var imageFallbackEl = document.getElementById("image-fallback");
@@ -28,6 +32,12 @@
 
   function currentPath() {
     return new URLSearchParams(window.location.search).get("path") || "";
+  }
+
+  // currentQuery 读出 URL 的查询词参数。返回 null 表示「不是搜索」（URL 不带 q），
+  // 空串是合法查询词（匹配一切，与 /api/search 的契约一致），两者必须区分。
+  function currentQuery() {
+    return new URLSearchParams(window.location.search).get("q");
   }
 
   // 浏览位置只放在 query 里：带 query 的 / 仍然是 /，不触碰静态资源与 /api/ 的分区边界。
@@ -158,6 +168,15 @@
     entriesHeaderEl.hidden = true;
   }
 
+  // hideMatches 把搜索结果视图整体收起来：列表视图、文件视图与错误态都不显示命中行
+  // （add-file-search design D9）。与 hideEntries 分开：两类视图互斥呈现，各自的
+  // 渲染方声明收起对方，不共用一个「全收起」让视图间的归属变得含糊。
+  function hideMatches() {
+    matchesEl.replaceChildren();
+    matchesEl.hidden = true;
+    noMatchesEl.hidden = true;
+  }
+
   // 两条 HTML 写入管线各有防线（Change 06 D2 的第一次收窄 + markdown-preview 的第二次收窄，形状不同）：
   // 高亮路径（文件体高亮、Markdown 源码形式、Markdown 渲染内的代码块高亮）靠输出形状校验——
   // 交给 HTML 解析器的字符串只能来自 highlight.js 的输出，且写入前经此校验：所有标签必须是 <span>
@@ -200,6 +219,7 @@
     renderLocation(list.path);
     renderParent(list);
     renderEntries(list);
+    hideMatches();
     hidePreview();
   }
 
@@ -537,11 +557,77 @@
 
   function renderFailure(code, message) {
     hideEntries();
+    hideMatches();
     hidePreview();
     parentLinkEl.hidden = true;
     parentLinkEl.removeAttribute("href");
     locationEl.textContent = locationText(currentPath());
     showError(ERROR_TEXT[code] || message || "无法打开该位置");
+  }
+
+  // ============ 搜索结果视图（add-file-search，design D9）============
+
+  // renderMatches 渲染结果视图：每个命中条目显示名称、所在目录与类型（spec: Search
+  // view and URL reproducibility）。与列表条目同构：名称一律是链接，点击目录命中进
+  // 列表视图、点击文件命中进既有预览分派——与列表条目的点击是同一条路（load() 按服务
+  // 端响应分派，前端不加「可否预览」分支）。三个字段全部经 textContent 写入：命中名
+  // 与所在目录都来自文件系统，可能含有需要转义的字符。
+  function renderMatches(result) {
+    clearError();
+    hideEntries();
+    hidePreview();
+
+    // 位置行表明这是结果视图、基准在哪、查的什么；上级入口沿用列表语义，从基准位置向上。
+    locationEl.textContent = locationText(result.path) + " — 搜索 “" + result.query + "”";
+    if (result.path === "") {
+      parentLinkEl.hidden = true;
+      parentLinkEl.removeAttribute("href");
+    } else {
+      parentLinkEl.setAttribute("href", urlFor(parentOf(result.path)));
+      parentLinkEl.hidden = false;
+    }
+
+    matchesEl.replaceChildren();
+    result.matches.forEach(function (match) {
+      var item = document.createElement("li");
+      item.className = "match";
+
+      var link = document.createElement("a");
+      link.className = "match-name entry-link";
+      link.setAttribute("href", urlFor(match.path));
+      link.textContent = match.name;
+      link.addEventListener("click", function (event) {
+        event.preventDefault();
+        navigate(match.path);
+      });
+      item.appendChild(link);
+
+      // 所在目录：从完整路径剥掉末段；命中位于根目录时显示根的绝对位置（design D9）。
+      item.appendChild(textCell("match-dir", locationText(parentOf(match.path))));
+      item.appendChild(textCell("match-type", match.type === "directory" ? "目录" : "文件"));
+
+      matchesEl.appendChild(item);
+    });
+
+    // 空命中呈现无命中说明而不是错误提示（spec: No matches are found）。
+    matchesEl.hidden = result.matches.length === 0;
+    noMatchesEl.hidden = result.matches.length !== 0;
+  }
+
+  // renderSearch 请求搜索端点并分派结果视图。错误走 ERROR_TEXT 机器可读分支，
+  // 与列表/内容视图同一套失败呈现。
+  function renderSearch(path, query) {
+    fetchJSON("/api/search?path=" + encodeURIComponent(path) + "&q=" + encodeURIComponent(query))
+      .then(function (result) {
+        if (result.ok) {
+          renderMatches(result.body);
+          return;
+        }
+        renderFailure(errorCode(result), errorMessage(result));
+      })
+      .catch(function (err) {
+        renderFailure("", "无法连接服务：" + err.message);
+      });
   }
 
   function fetchJSON(url) {
@@ -560,13 +646,23 @@
     return result.body && result.body.error ? result.body.error.message : "";
   }
 
-  // load 按响应的成败分派这次渲染列表还是预览，不预判 ?path= 指向什么（design D2）。
-  // 同一个位置参数在两个端点上指向不同类型的对象：列表成功就是目录，
-  // not_a_directory 就是文件，转问内容端点；其余失败原因两边一致，直接报错。
-  function load(path) {
+  // load 从当前 URL 读出浏览位置与查询词并分派视图（add-file-search design D9）：
+  // URL 带 q 时请求 /api/search 渲染结果视图，否则走既有列表/内容/图片分派。
+  // 调用前 URL 必已就位（navigate 与搜索提交各自 pushState，popstate 与首次加载的
+  // URL 由浏览器给定），位置与查询词只有一个来源，前进/后退因此天然在视图间正确切换。
+  function load() {
     // 每次查看从渲染形式开始（design D1）：load() 是一切视图切换的单一入口，
-    // 条目点击、parent 导航、popstate、首次加载都汇聚到这里。
+    // 条目点击、parent 导航、搜索提交、popstate、首次加载都汇聚到这里。
     sourceForm = false;
+    var path = currentPath();
+    // 搜索框的值随 URL 走：重开或后退到结果视图时输入框反映该 URL 的查询词，
+    // 回到列表视图（无 q）时自然清空。空串与缺失同形：输入框不区分两者。
+    searchInputEl.value = currentQuery() || "";
+    var query = currentQuery();
+    if (query !== null) {
+      renderSearch(path, query);
+      return;
+    }
     var listed = "/api/list?path=" + encodeURIComponent(path);
     var content = "/api/content?path=" + encodeURIComponent(path);
 
@@ -605,8 +701,23 @@
 
   function navigate(path) {
     window.history.pushState({}, "", urlFor(path));
-    load(path);
+    load();
   }
+
+  // 搜索提交（design D9）：以当前浏览位置为基准，pushState 到 /?path=<base>&q=<query>
+  // 后进入结果视图。空输入不动作：空查询会展开整棵子树，前端不替用户做这个决定
+  // （API 层的空查询语义仍按契约存在，供显式调用）。navigate 只管目录导航、不带 q，
+  // 搜索提交是唯一把 q 写进 URL 的入口，两类 URL 互不沾染。
+  searchFormEl.addEventListener("submit", function (event) {
+    event.preventDefault();
+    var query = searchInputEl.value;
+    if (query === "") {
+      return;
+    }
+    var target = "/?path=" + encodeURIComponent(currentPath()) + "&q=" + encodeURIComponent(query);
+    window.history.pushState({}, "", target);
+    load();
+  });
 
   // 根目录来自 /api/health：浏览位置在 URL 与列表响应中都是相对路径，
   // 绝对位置由健康端点提供的根目录拼出。
@@ -621,10 +732,10 @@
       root = "";
     })
     .then(function () {
-      load(currentPath());
+      load();
     });
 
   window.addEventListener("popstate", function () {
-    load(currentPath());
+    load();
   });
 })();

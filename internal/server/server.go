@@ -106,6 +106,8 @@ func apiHandler(b *browser) http.Handler {
 	// 图片内容端点：/api/ 分区里唯一的非 JSON 成功响应（service-startup MODIFIED 的开口，
 	// image-preview design D1）；错误响应仍走 JSON 信封。
 	mux.HandleFunc("/api/image", b.handleImage)
+	// 搜索端点：基准位置子树内按名称递归定位条目（add-file-search）。
+	mux.HandleFunc("/api/search", b.handleSearch)
 	mux.HandleFunc("/api/", b.handleAPINotFound)
 	return mux
 }

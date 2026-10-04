@@ -14,6 +14,14 @@
     <header class="toolbar">
       <h1 class="title">http-file-browser</h1>
       <p id="location" class="location" aria-live="polite">正在加载…</p>
+      <!-- 搜索入口（add-file-search）：以当前浏览位置为基准按名称搜索子树。
+           空输入提交不动作由 app.js 的 submit 处理拦截（design D9）；
+           提交成功后 URL 变为 /?path=<base>&q=<query>，视图切换走 load()。 -->
+      <form id="search-form" class="search-form">
+        <input id="search-input" class="search-input" type="search" name="q"
+               placeholder="按名称搜索当前目录子树…" aria-label="按名称搜索当前目录子树"
+               autocomplete="off">
+      </form>
     </header>
 
     <p id="error" class="error" role="alert" hidden></p>
@@ -32,6 +40,12 @@
     <ul id="entries" class="entries"></ul>
 
     <p id="empty" class="empty" hidden>此目录为空</p>
+
+    <!-- 搜索结果视图（add-file-search）：行结构与列表条目同构，名称 / 所在目录 / 类型
+         三列全部经 textContent 写入（app.js renderMatches）。与 #entries 互斥呈现：
+         列表视图与错误态由 app.js 收起本视图。 -->
+    <ul id="matches" class="matches" hidden></ul>
+    <p id="no-matches" class="empty" hidden>没有名称匹配的条目</p>
 
     <!-- 文件视图：列表三列与空目录提示都让位给内容。素文本路径经 textContent 写入；
          Markdown 文件有渲染与源码两种呈现形式，各挂一条防线（app.js safeHighlightHTML 上方注释）：
