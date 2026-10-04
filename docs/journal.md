@@ -163,3 +163,17 @@
   4. **sync 第五次退化成「单块整替 + 断言」**（延续 05 观察 3、07 观察 2、08 观察 3）：脚本按 `### Requirement:` 标题切块、自后向前做字节替换，三连断言——每个 delta 块在合并结果中字节一致、Requirement 总数不变、旧政策措辞（「经字面解析后」「只依据字面路径」）零残留。MODIFIED 整替场景下，智能合并没有用武之地；断言的形状（计数不变 + 旧措辞缺席）比合并算法本身更能兜底。
   5. **未验证也要记录保障边界。** Windows 行为实证（design D6 / tasks 3.4）：**未验证**。用户确认本机不使用 Windows，机器上残留的 Win11 UTM 虚拟机已废弃多年，不作为实证环境；junction 与 8.3 短名下 `filepath.EvalSymlinks` 的实际解析行为维持「不预先假设」。如实记录的是边界而非空白：全部符号链接用例在无法创建软链的环境（含 Windows）自动 skip，不会假失败；`GOOS=windows go build ./...` 交叉编译通过（ADR-0001 不回退）；spec 只承诺「解析后物理位置在根内」，与解析器的具体行为正交，未验证不影响 spec 与方案。将来有真实 Windows 环境时，跑一条「根内 junction 指向根外 → 请求被判 `outside_root`」即可闭合此问号。
   6. **归档时确认 Purpose 仍然为真**（Change 03 观察 6 纪律第六次执行）：`directory-browsing` 的 Purpose 写「不包含文件内容读取」，本 Change 只动越界判定基准，成立；`text-preview` 与 `image-preview` 的 Purpose 未提及判定基准，无需改动。想法池的两条符号链接 wart（条目类型、链接长度）按 design Non-Goals 的预约随状态联动复核措辞——「字面路径可提供」这半句前提已随本 Change 变假，池中条目改写为「可列出性已分裂」的新表述。
+
+### 10 add-file-search
+
+- 日期：2026-10-04（归档目录 `openspec/changes/archive/2026-10-04-add-file-search/`）
+- 现象一（AI 把 Spec 写成实现方案）：**未发生**。八条 ADDED Requirement 全部是可观察行为——「以基准位置子树内按名称匹配的条目列表返回」「仅以条目自身的名称进行匹配」「SHALL NOT 在命中条目中提供条目内容」「以确定的顺序返回」「遍历 SHALL NOT 进入符号链接指出的目录」；手写 DFS、`DirEntry.IsDir()`、`strings.Contains(strings.ToLower(...))`、`path.Join`、两段循环等机制全部留在 design D1-D9 与代码注释，spec 里一个机制词都没有。
+- 现象二（需求变化被误做成 ADDED）：**未发生**。delta 零 MODIFIED、零 RENAMED；现有六个 capability 的 Requirement 一字未动——搜索结果只是「名字+路径」元数据，不触碰 `Directory listing response` 的「SHALL NOT 提供内容」的门，也不触碰内容判定管道。proposal 提前声明零 MODIFIED，design D4 解释「不交叉引用」的取舍，落地一致。
+- 现象三（Apply 偷偷扩大范围）：**未发生**。feat 提交的文件清单与 proposal Impact 逐项对应：后端 `internal/server/search.go` + `search_test.go`、路由在 `server.go` 一行 mux.HandleFunc；前端 `web/index.html`、`web/app.js`、`web/style.css`；`browse.go` 一字未动（`resolve`、`classify`、`sortEntries` 全复用）、`content.go`/`image.go` 一字未动；既有测试（list/content/image）零回归。无功能被静默增删。
+- 其他观察：
+  1. **机制被复用的边界 = 「复用即机制」需要专门论证**。D7 把「基准失败复用 `resolve`+`classify`、子树失败静默跳过」拆成两条独立决定——基准按既有错误码走，子树按局部降级走，方向相反。两者共用了同一个 `resolve` 函数入口，但语义分裂：基准不放松、子树不扩展。论证「同一份代码不表示同一份语义」的边界要写在 design 里，否则读者会以为复用=语义一致。
+  2. **方向相反的两段循环比一段带条件判断的循环更短**。`searchTree` 第一段输出本目录命中、第二段递归子目录，单循环会把先排到的子目录把子树命中插进来——树序契约要求「本目录命中全部先于子树命中」。两段而不是一段，不是为了好看，是为了让顺序契约直接对应到代码骨架（design D5）。换言之：spec 的顺序要求直接决定了循环结构，省掉的就省掉了，多写就多写。
+  3. **手写遍历与测试 fixture 的双重隔离**。悬空软链 + 无权限子目录的确定性测试靠 `browse_test.go` 既存的 fixture 模式（tempdir + httptest + 显式 chmod 0）；搜索侧不需要引入新测试基建——同一份 fixture 模板只是新增若干 helper（`makeUnreadableDir` 等）。可复现性来自 fixture 模式而非被测代码本身，与 Change 02 design D7 的 fixture 原则一脉相承。
+  4. **瘦条目让遍历天然免疫元信息取不到的边角**。`searchTree` 从头到尾不取条目元信息——`listEntry` 在这里只是「名字 + 类型」排序用，不调 `entryInfo`。结果：悬空软链无 Info/Stat 可失败、照常命中；软链目录的子树不下钻但软链本身按名字参与匹配。瘦是契约层的瘦（D4），也是遍历层的免疫——后者是前者自然带来的副产品，不必刻意去「修」这个边角。
+  5. **22 个 spec Scenario 对应 22 个测试函数**：1:1 对得齐没有隐式合并——每条 Scenario 的「WHEN/THEN」都有独立的确定性测试函数（部分场景如「同一目录内列表顺序」与「树序」共享同一 fixture 的多个断言，但仍是独立的 test 函数）。这是 Change 02 起的纪律延续：spec 的 Scenario 列表与测试函数列表同构，可逐项勾对，验收不再靠记忆。
+  6. **归档时确认 Purpose 仍然为真**（Change 03 观察 6 纪律第七次执行）：六个现有 capability 的 Purpose 一字未改（proposal 与 delta 一致零 MODIFIED），新增 capability `search` 的 Purpose「不包含依据文件内容的搜索」与代码（不读 `entryInfo`、不读文件内容、` searchMatch` 无内容字段）一致。想法池新增一条「内容搜索」按 proposal Non-Goal 与 design D1 的预约，与「遗留中文编码按 UTF-8 处理」的乱码问题在此会放大被一并点到（roadmap 想法池同步写入）。

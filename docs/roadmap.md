@@ -48,7 +48,7 @@
 | 08 | `improve-markdown-preview` | 渲染/源码视图切换 | 第二次需求变更，MODIFIED 演练；兑现 07 的「条件挂呈现形式」留位，syntax-highlighting 零 delta | ✅ [`2026-10-03-improve-markdown-preview`](changes/archive/2026-10-03-improve-markdown-preview/) |
 | 09 | `add-image-preview` | 图片预览 | 携带 service-startup MODIFIED：`/api/` 分区为图片字节开口；SVG 记入想法池 | ✅ [`2026-10-04-add-image-preview`](changes/archive/2026-10-04-add-image-preview/) |
 | 17 | `improve-root-confinement` | 越界判定由字面路径改为物理路径 | 13 的前置，须先于 13 归档；执行顺位插队至 10 之前。符号链接解析后须落在解析后的根目录内，无开关；携带 directory-browsing / text-preview / image-preview 三处 MODIFIED | ✅ [`2026-10-04-improve-root-confinement`](changes/archive/2026-10-04-improve-root-confinement/) |
-| 10 | `add-file-search` | 文件搜索 | 文件名递归搜索（子串、大小写不敏感）；内容搜索切出到想法池 | 🚧 |
+| 10 | `add-file-search` | 文件搜索 | 文件名递归搜索（子串、大小写不敏感）；内容搜索切出到想法池 | ✅ [`2026-10-04-add-file-search`](changes/archive/2026-10-04-add-file-search/) |
 | 11 | `add-file-editing` | 文件编辑与保存 | 先 Explore 保存语义 | 💡 |
 | 12 | `add-edit-conflict-detection` | 编辑期间检测外部修改 | | 💡 |
 | 13 | `add-remote-access` | 监听地址 | 先 Explore；前置：17 | 💡 |
